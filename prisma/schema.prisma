@@ -1,0 +1,226 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  phone         String    @unique
+  name          String?
+  email         String?   @unique
+  address       String?
+  isVerified    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  orders        Order[]
+  pcBuilds      PCBuild[]
+  cart          CartItem[]
+  sharedBuilds  SharedBuild[]
+  profilePicture String?
+  bio           String?   @db.Text
+}
+
+model Product {
+  id          String         @id @default(cuid())
+  sku         String         @unique
+  name        String
+  description String         @db.Text
+  price       Decimal        @db.Decimal(10, 2)
+  stock       Int           @default(0)
+  images      ProductImage[]
+  categoryId  String
+  category    Category      @relation(fields: [categoryId], references: [id])
+  specs       ProductSpecification[]  // Changed from Json? to relation
+  brand       String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  orderItems  OrderItem[]
+  cartItems   CartItem[]
+  buildItems  BuildItem[]
+  tags        ProductTag[]
+}
+
+model ProductTag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  products  Product[]
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  filePath  String   // Local filesystem path
+  url       String?  // Optional CDN URL
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  isMain    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  size      Int?     // File size in bytes
+  mimeType  String?  // Image MIME type
+
+  @@index([productId])
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique  // URL-friendly version of name
+  description String?   @db.Text
+  products    Product[]
+  parentId    String?   // For subcategories
+  parent      Category? @relation("SubCategories", fields: [parentId], references: [id])
+  children    Category[] @relation("SubCategories")
+  icon        String?   // Icon path or name
+  featured    Boolean   @default(false)
+  sortOrder   Int       @default(0)
+}
+
+model PCBuild {
+  id          String       @id @default(cuid())
+  name        String
+  description String?      @db.Text
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  items       BuildItem[]
+  isPublic    Boolean     @default(false)
+  totalPrice  Decimal     @db.Decimal(10, 2)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  sharedAs    SharedBuild[]
+}
+
+model BuildItem {
+  id          String    @id @default(cuid())
+  buildId     String
+  build       PCBuild   @relation(fields: [buildId], references: [id])
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  quantity    Int       @default(1)
+}
+
+model SharedBuild {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  buildId     String
+  build       PCBuild   @relation(fields: [buildId], references: [id])
+  shareLink   String    @unique
+  createdAt   DateTime  @default(now())
+  isPublic    Boolean   @default(true)
+  views       Int       @default(0)
+  likes       Int       @default(0)
+
+  @@index([userId])
+  @@index([buildId])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  status          OrderStatus @default(PENDING)
+  totalAmount     Decimal     @db.Decimal(10, 2)
+  discountAmount  Decimal     @db.Decimal(10, 2) @default(0)
+  finalAmount     Decimal     @db.Decimal(10, 2)
+  address         String      // Simplified from shippingAddress
+  paymentStatus   PaymentStatus @default(PENDING)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  appliedDiscount Discount?   @relation(fields: [discountId], references: [id])
+  discountId      String?
+  notes           String?     @db.Text
+
+  @@index([userId])
+}
+
+model Discount {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  description   String?   @db.Text
+  type          DiscountType
+  value         Decimal   @db.Decimal(10, 2)  // Percentage or fixed amount
+  minOrderValue Decimal?  @db.Decimal(10, 2)
+  maxDiscount   Decimal?  @db.Decimal(10, 2)
+  startDate     DateTime
+  endDate       DateTime?
+  isActive      Boolean   @default(true)
+  usageLimit    Int?      // Maximum number of times this discount can be used
+  usedCount     Int       @default(0)
+  orders        Order[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now())
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+model OrderItem {
+  id          String    @id @default(cuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id])
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  quantity    Int
+  price       Decimal   @db.Decimal(10, 2)
+}
+
+model CartItem {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  quantity    Int
+}
+
+model OTPVerification {
+  id          String    @id @default(cuid())
+  phone       String
+  otp         String
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  verified    Boolean   @default(false)
+
+  @@index([phone, otp])
+}
+
+model ProductSpecification {
+  id          String    @id @default(cuid())
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name        String    // e.g., "CPU Speed", "RAM Type", "Storage Capacity"
+  value       String    // e.g., "3.4 GHz", "DDR4", "1TB"
+  unit        String?   // Optional unit e.g., "GHz", "GB", "TB"
+  groupName   String?   // For grouping specs e.g., "Performance", "Physical", "Memory"
+  sortOrder   Int       @default(0)  // For controlling display order
+  isHighlight Boolean   @default(false)  // To mark important specs
+
+  @@index([productId])
+  @@unique([productId, name])  // Prevent duplicate spec names for the same product
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
