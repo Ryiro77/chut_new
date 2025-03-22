@@ -41,13 +41,8 @@ type Product = {
   category: {
     id: string
     name: string
-    description?: string | null
-    slug: string
-    parentId?: string | null
-    icon?: string | null
-    featured: boolean
-    sortOrder: number
   }
+  tags: { id: string; name: string }[]
 }
 
 export default function EditProduct({ productId }: { productId: string }) {
@@ -59,6 +54,8 @@ export default function EditProduct({ productId }: { productId: string }) {
   const [images, setImages] = useState<ProductImage[]>([])
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [mainImageId, setMainImageId] = useState<string | null>(null)
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
 
   useEffect(() => {
     const loadProduct = async () => {
@@ -70,6 +67,7 @@ export default function EditProduct({ productId }: { productId: string }) {
           setImages(data.images || [])
           const mainImage = data.images?.find(img => img.isMain)
           setMainImageId(mainImage?.id || null)
+          setTags(data.tags?.map(tag => tag.name) || [])
         } else {
           setError('Product not found')
         }
@@ -118,6 +116,9 @@ export default function EditProduct({ productId }: { productId: string }) {
       // Add existing images with updated main image status
       formData.append('existingImages', JSON.stringify(images))
       
+      // Add tags to form data
+      formData.append('tags', JSON.stringify(tags))
+      
       // Add new images
       imageFiles.forEach((file, index) => {
         formData.append(`image${index}`, file)
@@ -156,6 +157,24 @@ export default function EditProduct({ productId }: { productId: string }) {
     const newSpecs = [...specs]
     newSpecs[index] = { ...newSpecs[index], [field]: value }
     setSpecs(newSpecs)
+  }
+
+  const handleAddTag = () => {
+    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
+      setTags([...tags, tagInput.trim()])
+      setTagInput('')
+    }
+  }
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags(tags.filter(tag => tag !== tagToRemove))
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleAddTag()
+    }
   }
 
   if (!product || loading) return <div className="animate-pulse">Loading...</div>
@@ -386,6 +405,47 @@ export default function EditProduct({ productId }: { productId: string }) {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="space-y-4 mt-8">
+          <div className="flex justify-between items-center">
+            <label className="text-lg font-medium">Tags</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Add a tag..."
+                className="p-2 border rounded"
+              />
+              <button
+                type="button"
+                onClick={handleAddTag}
+                className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <div key={tag} className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
+                <span>{tag}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveTag(tag)}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          
+          {/* Hidden input to include tags in form data */}
+          <input type="hidden" name="tags" value={JSON.stringify(tags)} />
         </div>
 
         {error && (

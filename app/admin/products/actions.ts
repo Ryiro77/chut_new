@@ -124,6 +124,7 @@ export async function updateProduct(id: string, formData: FormData) {
   const componentType = formData.get('componentType') as ComponentType
   const specs = JSON.parse(formData.get('specs') as string || '[]') as SpecInput[]
   const existingImages = JSON.parse(formData.get('existingImages') as string || '[]') as ProductImage[]
+  const tags = JSON.parse(formData.get('tags') as string || '[]') as string[]
   const existingImageIds = existingImages.map((img) => img.id)
 
   try {
@@ -151,7 +152,7 @@ export async function updateProduct(id: string, formData: FormData) {
       }
     })
 
-    // Handle images deletion - delete files that are not in existingImages
+    // Handle images deletion
     await prisma.productImage.deleteMany({
       where: {
         productId: id,
@@ -217,7 +218,13 @@ export async function updateProduct(id: string, formData: FormData) {
         images: {
           create: newImages.map(img => ({
             ...img,
-            isMain: false // New images are never main by default
+            isMain: false
+          }))
+        },
+        tags: {
+          deleteMany: {},
+          create: tags.map(name => ({
+            name
           }))
         }
       }
@@ -232,7 +239,7 @@ export async function updateProduct(id: string, formData: FormData) {
 
 // Define type for raw product from Prisma
 type RawProduct = Prisma.ProductGetPayload<{
-  include: { category: true; specs: true; images: true }
+  include: { category: true; specs: true; images: true; tags: true }
 }>
 
 type ProductImage = {
@@ -267,7 +274,8 @@ export async function getProduct(id: string) {
             sortOrder: 'asc'
           }
         },
-        images: true
+        images: true,
+        tags: true
       }
     })
     
@@ -288,6 +296,7 @@ export async function searchProducts(query: string) {
           { name: { contains: searchQuery } },
           { sku: { contains: searchQuery } },
           { brand: { contains: searchQuery } },
+          { tags: { some: { name: { contains: searchQuery } } } }
         ],
       },
       include: {
@@ -297,7 +306,8 @@ export async function searchProducts(query: string) {
             sortOrder: 'asc'
           }
         },
-        images: true
+        images: true,
+        tags: true
       },
       take: 10
     })
