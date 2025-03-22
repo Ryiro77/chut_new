@@ -29,7 +29,7 @@ type Product = {
 }
 
 export default function AdminProducts() {
-  const [view, setView] = useState<'add' | 'edit'>('add')
+  const [view, setView] = useState<'add' | 'edit'>('edit')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [searchResults, setSearchResults] = useState<Product[]>([])
@@ -56,8 +56,6 @@ export default function AdminProducts() {
 
   function handleSelectProduct(product: Product) {
     setSelectedProductId(product.id)
-    setSearchQuery('')
-    setSearchResults([])
   }
 
   return (
@@ -111,7 +109,8 @@ export default function AdminProducts() {
             <div className="text-gray-500 my-4">Searching...</div>
           )}
 
-          {!selectedProductId && searchResults.length > 0 && (
+          {/* Show search results if there's no selected product or there are search results */}
+          {searchResults.length > 0 && (
             <div className="mb-4 border rounded divide-y">
               {searchResults.map((product) => (
                 <button
@@ -134,7 +133,17 @@ export default function AdminProducts() {
             </div>
           )}
 
-          {selectedProductId && <EditProduct productId={selectedProductId} />}
+          {selectedProductId && (
+            <div>
+              <button
+                onClick={() => setSelectedProductId(null)}
+                className="mb-4 px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded flex items-center"
+              >
+                <span>← Back to Search</span>
+              </button>
+              <EditProduct productId={selectedProductId} />
+            </div>
+          )}
         </div>
       )}
     </div>
