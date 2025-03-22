@@ -82,6 +82,7 @@ model Category {
   icon        String?   // Icon path or name
   featured    Boolean   @default(false)
   sortOrder   Int       @default(0)
+  type        ComponentType @default(OTHER)
 }
 
 model PCBuild {
@@ -223,4 +224,16 @@ enum PaymentStatus {
   COMPLETED
   FAILED
   REFUNDED
+}
+
+enum ComponentType {
+  CPU
+  GPU
+  MOTHERBOARD
+  RAM
+  STORAGE
+  PSU
+  CASE
+  COOLER
+  OTHER
 }
