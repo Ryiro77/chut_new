@@ -2,22 +2,33 @@
 
 import { revalidatePath } from 'next/cache'
 import { PrismaClient, Prisma } from '@prisma/client'
+import { Decimal } from '@prisma/client/runtime/library'
 
 const prisma = new PrismaClient()
 
 type ComponentType = 'CPU' | 'GPU' | 'MOTHERBOARD' | 'RAM' | 'STORAGE' | 'PSU' | 'CASE' | 'COOLER' | 'OTHER'
 
+type SpecInput = {
+  id?: string
+  name: string
+  value: string
+  unit?: string | null
+  groupName?: string | null
+  isHighlight?: boolean
+  sortOrder?: number
+}
+
 export async function createProduct(formData: FormData) {
   const name = formData.get('name') as string
   const description = formData.get('description') as string
-  const price = parseFloat(formData.get('price') as string)
+  const price = new Decimal(formData.get('price') as string)
   const stock = parseInt(formData.get('stock') as string)
   const brand = formData.get('brand') as string
   const sku = formData.get('sku') as string
   const componentType = formData.get('componentType') as ComponentType
+  const specs = JSON.parse(formData.get('specs') as string || '[]') as SpecInput[]
 
   try {
-    // First, get or create the category based on component type
     const category = await prisma.category.upsert({
       where: {
         name: componentType,
@@ -29,7 +40,6 @@ export async function createProduct(formData: FormData) {
       },
     })
 
-    // Then create the product with the category
     await prisma.product.create({
       data: {
         name,
@@ -39,7 +49,21 @@ export async function createProduct(formData: FormData) {
         brand,
         sku,
         categoryId: category.id,
+        specs: {
+          create: specs.map(spec => ({
+            name: spec.name,
+            value: spec.value,
+            unit: spec.unit,
+            groupName: spec.groupName,
+            isHighlight: spec.isHighlight || false,
+            sortOrder: spec.sortOrder || 0
+          }))
+        }
       },
+      include: {
+        specs: true,
+        category: true
+      }
     })
     
     revalidatePath('/admin/products')
@@ -52,14 +76,14 @@ export async function createProduct(formData: FormData) {
 export async function updateProduct(id: string, formData: FormData) {
   const name = formData.get('name') as string
   const description = formData.get('description') as string
-  const price = parseFloat(formData.get('price') as string)
+  const price = new Decimal(formData.get('price') as string)
   const stock = parseInt(formData.get('stock') as string)
   const brand = formData.get('brand') as string
   const sku = formData.get('sku') as string
   const componentType = formData.get('componentType') as ComponentType
+  const specs = JSON.parse(formData.get('specs') as string || '[]') as SpecInput[]
 
   try {
-    // First, get or create the category based on component type
     const category = await prisma.category.upsert({
       where: {
         name: componentType,
@@ -71,7 +95,20 @@ export async function updateProduct(id: string, formData: FormData) {
       },
     })
 
-    // Then update the product
+    // First delete existing specs that are not in the new specs array
+    const existingSpecIds = specs.filter(spec => spec.id).map(spec => spec.id as string)
+    await prisma.productSpecification.deleteMany({
+      where: { 
+        productId: id,
+        NOT: {
+          id: {
+            in: existingSpecIds
+          }
+        }
+      }
+    })
+
+    // Then update the product with its specs
     await prisma.product.update({
       where: { id },
       data: {
@@ -82,7 +119,30 @@ export async function updateProduct(id: string, formData: FormData) {
         brand,
         sku,
         categoryId: category.id,
-      },
+        specs: {
+          upsert: specs.map(spec => ({
+            where: {
+              id: spec.id || '',
+            },
+            create: {
+              name: spec.name,
+              value: spec.value,
+              unit: spec.unit,
+              groupName: spec.groupName,
+              isHighlight: spec.isHighlight || false,
+              sortOrder: spec.sortOrder || 0
+            },
+            update: {
+              name: spec.name,
+              value: spec.value,
+              unit: spec.unit,
+              groupName: spec.groupName,
+              isHighlight: spec.isHighlight || false,
+              sortOrder: spec.sortOrder || 0
+            }
+          }))
+        }
+      }
     })
     
     revalidatePath('/admin/products')
@@ -94,7 +154,7 @@ export async function updateProduct(id: string, formData: FormData) {
 
 // Define type for raw product from Prisma
 type RawProduct = Prisma.ProductGetPayload<{
-  include: { category: true }
+  include: { category: true; specs: true }
 }>
 
 // Transform Prisma data to be serializable
@@ -111,7 +171,14 @@ export async function getProduct(id: string) {
   try {
     const product = await prisma.product.findUnique({
       where: { id },
-      include: { category: true }
+      include: { 
+        category: true,
+        specs: {
+          orderBy: {
+            sortOrder: 'asc'
+          }
+        }
+      }
     })
     
     if (!product) return null
@@ -135,12 +202,16 @@ export async function searchProducts(query: string) {
         ],
       },
       include: {
-        category: true
+        category: true,
+        specs: {
+          orderBy: {
+            sortOrder: 'asc'
+          }
+        }
       },
       take: 10
     })
     
-    // Transform each product to be serializable
     return products.map(serializeProduct)
 
   } catch (error) {
