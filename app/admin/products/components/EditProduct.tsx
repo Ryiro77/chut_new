@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { getProduct, updateProduct } from '../actions'
 import Image from 'next/image'
 
-const componentTypes = ['CPU', 'GPU', 'MOTHERBOARD', 'RAM', 'STORAGE', 'PSU', 'CASE', 'COOLER', 'OTHER'] as const
+// const componentTypes = ['CPU', 'GPU', 'MOTHERBOARD', 'RAM', 'STORAGE', 'PSU', 'CASE', 'COOLER', 'OTHER'] as const
 
 type Spec = {
   id?: string
@@ -182,9 +182,13 @@ export default function EditProduct({ productId }: { productId: string }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-4">Edit Product</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-xl font-bold">Edit Product</h2>
+        <span className="px-2 py-1 bg-gray-100 rounded text-sm">
+          {product?.category.name.charAt(0) + product?.category.name.slice(1).toLowerCase().replace('_', ' ')}
+        </span>
+      </div>
       <form action={handleSubmit} className="space-y-4">
-        {/* Basic product fields section */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="name" className="block mb-1">Product Name</label>
@@ -224,30 +228,20 @@ export default function EditProduct({ productId }: { productId: string }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="brand" className="block mb-1">Brand</label>
-            <input type="text" id="brand" name="brand" required 
-              defaultValue={product?.brand}
-              className="w-full p-2 border rounded" />
-          </div>
-
-          <div>
-            <label htmlFor="componentType" className="block mb-1">Component Type</label>
-            <select id="componentType" name="componentType" required 
-              defaultValue={product?.category.name}
-              className="w-full p-2 border rounded">
-              <option value="">Select a component type</option>
-              {componentTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type.charAt(0) + type.slice(1).toLowerCase().replace('_', ' ')}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label htmlFor="brand" className="block mb-1">Brand</label>
+          <input type="text" id="brand" name="brand" required 
+            defaultValue={product?.brand}
+            className="w-full p-2 border rounded" />
         </div>
 
-        {/* Images section */}
+        {/* Add hidden input for component type to maintain the value */}
+        <input 
+          type="hidden" 
+          name="componentType" 
+          value={product?.category.name} 
+        />
+
         <div className="space-y-4 mt-8">
           <div className="flex justify-between items-center">
             <label className="text-lg font-medium">Product Images</label>
@@ -323,7 +317,6 @@ export default function EditProduct({ productId }: { productId: string }) {
           </div>
         </div>
 
-        {/* Specifications section */}
         <div className="space-y-4 mt-8">
           <div className="flex justify-between items-center">
             <label className="text-lg font-medium">Specifications</label>
