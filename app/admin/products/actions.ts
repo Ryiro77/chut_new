@@ -3,6 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { PrismaClient, Prisma } from '@prisma/client'
 import { Decimal } from '@prisma/client/runtime/library'
+import { writeFile } from 'fs/promises'
+import { join } from 'path'
+import { v4 as uuidv4 } from 'uuid'
+import * as fs from 'fs/promises'
 
 const prisma = new PrismaClient()
 
@@ -16,6 +20,43 @@ type SpecInput = {
   groupName?: string | null
   isHighlight?: boolean
   sortOrder?: number
+}
+
+async function handleImageUpload(file: File): Promise<{ filePath: string; size: number; mimeType: string }> {
+  try {
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
+    
+    // Create unique filename
+    const uniqueFilename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`
+    const relativePath = `/uploads/products/${uniqueFilename}`
+    const absolutePath = join(process.cwd(), 'public', relativePath)
+    
+    // Ensure directory exists
+    await createUploadDirIfNotExists()
+    
+    // Write file
+    await writeFile(absolutePath, buffer)
+    
+    return {
+      filePath: relativePath,
+      size: file.size,
+      mimeType: file.type
+    }
+  } catch (error) {
+    console.error('Error uploading image:', error)
+    throw new Error('Failed to upload image')
+  }
+}
+
+async function createUploadDirIfNotExists() {
+  const dir = join(process.cwd(), 'public', 'uploads', 'products')
+  try {
+    await fs.mkdir(dir, { recursive: true })
+  } catch (error) {
+    console.error('Error creating upload directory:', error)
+    throw new Error('Failed to create upload directory')
+  }
 }
 
 export async function createProduct(formData: FormData) {
@@ -82,6 +123,8 @@ export async function updateProduct(id: string, formData: FormData) {
   const sku = formData.get('sku') as string
   const componentType = formData.get('componentType') as ComponentType
   const specs = JSON.parse(formData.get('specs') as string || '[]') as SpecInput[]
+  const existingImages = JSON.parse(formData.get('existingImages') as string || '[]') as ProductImage[]
+  const existingImageIds = existingImages.map((img) => img.id)
 
   try {
     const category = await prisma.category.upsert({
@@ -95,7 +138,7 @@ export async function updateProduct(id: string, formData: FormData) {
       },
     })
 
-    // First delete existing specs that are not in the new specs array
+    // Handle existing specs deletion
     const existingSpecIds = specs.filter(spec => spec.id).map(spec => spec.id as string)
     await prisma.productSpecification.deleteMany({
       where: { 
@@ -108,7 +151,36 @@ export async function updateProduct(id: string, formData: FormData) {
       }
     })
 
-    // Then update the product with its specs
+    // Handle images deletion - delete files that are not in existingImages
+    await prisma.productImage.deleteMany({
+      where: {
+        productId: id,
+        NOT: {
+          id: {
+            in: existingImageIds
+          }
+        }
+      }
+    })
+
+    // Update existing images (main status)
+    for (const image of existingImages) {
+      await prisma.productImage.update({
+        where: { id: image.id },
+        data: { isMain: image.isMain }
+      })
+    }
+
+    // Handle new image uploads
+    const newImages = []
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith('image') && value instanceof File) {
+        const imageData = await handleImageUpload(value)
+        newImages.push(imageData)
+      }
+    }
+
+    // Update product with all changes
     await prisma.product.update({
       where: { id },
       data: {
@@ -141,6 +213,12 @@ export async function updateProduct(id: string, formData: FormData) {
               sortOrder: spec.sortOrder || 0
             }
           }))
+        },
+        images: {
+          create: newImages.map(img => ({
+            ...img,
+            isMain: false // New images are never main by default
+          }))
         }
       }
     })
@@ -154,8 +232,19 @@ export async function updateProduct(id: string, formData: FormData) {
 
 // Define type for raw product from Prisma
 type RawProduct = Prisma.ProductGetPayload<{
-  include: { category: true; specs: true }
+  include: { category: true; specs: true; images: true }
 }>
+
+type ProductImage = {
+  id: string
+  filePath: string
+  url: string | null
+  productId: string
+  isMain: boolean
+  createdAt: Date
+  size: number | null
+  mimeType: string | null
+}
 
 // Transform Prisma data to be serializable
 function serializeProduct(product: RawProduct) {
@@ -177,13 +266,13 @@ export async function getProduct(id: string) {
           orderBy: {
             sortOrder: 'asc'
           }
-        }
+        },
+        images: true
       }
     })
     
     if (!product) return null
     return serializeProduct(product)
-
   } catch (error) {
     console.error('Error fetching product:', error)
     throw new Error('Failed to fetch product')
@@ -207,13 +296,13 @@ export async function searchProducts(query: string) {
           orderBy: {
             sortOrder: 'asc'
           }
-        }
+        },
+        images: true
       },
       take: 10
     })
     
     return products.map(serializeProduct)
-
   } catch (error) {
     console.error('Error searching products:', error)
     throw new Error('Failed to search products')
