@@ -97,51 +97,49 @@ export default function Tags({ selectedTags, onTagsChange }: TagsProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
         <div className="flex-1">
           <input
             type="text"
             value={searchInput}
             onChange={handleSearchChange}
             placeholder="Search tags..."
-            className="w-full p-2 border rounded"
+            className="w-full p-1.5 border rounded text-sm"
           />
         </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="New tag..."
-            className="p-2 border rounded"
-          />
-          <button
-            type="button"
-            onClick={handleAddTag}
-            className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
-          >
-            Add
-          </button>
-        </div>
+        <input
+          type="text"
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="New tag..."
+          className="p-1.5 border rounded text-sm w-32"
+        />
+        <button
+          type="button"
+          onClick={handleAddTag}
+          className="px-2 py-1.5 text-sm bg-green-500 text-white rounded hover:bg-green-600 whitespace-nowrap"
+        >
+          Add
+        </button>
       </div>
 
       {error && (
-        <div className="p-3 bg-red-100 text-red-700 rounded">
+        <div className="p-2 bg-red-100 text-red-700 rounded text-sm">
           {error}
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {loading ? (
-          <div className="text-gray-500">Loading tags...</div>
+          <div className="text-gray-500 text-sm">Loading tags...</div>
         ) : allTags.length === 0 ? (
-          <div className="text-gray-500">No tags found</div>
+          <div className="text-gray-500 text-sm">No tags found</div>
         ) : (
           allTags.map((tag) => (
             <div
               key={tag.id}
-              className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer ${
+              className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer text-sm ${
                 selectedTags.includes(tag.name)
                   ? 'bg-blue-100 text-blue-700'
                   : 'bg-gray-100 text-gray-700'

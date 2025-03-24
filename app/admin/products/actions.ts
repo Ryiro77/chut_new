@@ -388,3 +388,16 @@ export async function deleteTag(id: string) {
     throw new Error('Failed to delete tag')
   }
 }
+
+export async function deleteProduct(id: string) {
+  try {
+    await prisma.product.delete({
+      where: { id }
+    })
+    revalidatePath('/admin/products')
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting product:', error)
+    throw new Error('Failed to delete product')
+  }
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getProduct, updateProduct } from '../actions'
+import { getProduct, updateProduct, deleteProduct } from '../actions'
 import Image from 'next/image'
 import Tags from './Tags'
 
@@ -64,6 +64,7 @@ export default function EditProduct({ productId }: { productId: string }) {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [mainImageId, setMainImageId] = useState<string | null>(null)
   const [tags, setTags] = useState<string[]>([])
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   useEffect(() => {
     const loadProduct = async () => {
@@ -118,6 +119,16 @@ export default function EditProduct({ productId }: { productId: string }) {
       ...img,
       isMain: img.id === imageId
     })))
+  }
+
+  const handleDelete = async () => {
+    try {
+      await deleteProduct(productId)
+      window.location.href = '/admin/products' // Redirect after successful deletion
+    } catch {
+      setError('Failed to delete product')
+      setTimeout(() => setError(null), 3000)
+    }
   }
 
   async function handleSubmit(formData: FormData) {
@@ -178,246 +189,283 @@ export default function EditProduct({ productId }: { productId: string }) {
   if (error) return <div className="text-red-500">{error}</div>
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-4">
-        <h2 className="text-xl font-bold">Edit Product</h2>
-        <span className="px-2 py-1 bg-gray-100 rounded text-sm">
-          {product?.category.name.charAt(0) + product?.category.name.slice(1).toLowerCase().replace('_', ' ')}
-        </span>
+    <div className="max-w-full">
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-bold">Edit Product</h2>
+          <span className="px-2 py-1 bg-gray-100 rounded text-sm">
+            {product?.category.name.charAt(0) + product?.category.name.slice(1).toLowerCase().replace('_', ' ')}
+          </span>
+        </div>
+        <button
+          onClick={() => setShowDeleteDialog(true)}
+          className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+        >
+          Delete Product
+        </button>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold mb-4">Delete Product</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete &ldquo;{product?.name}&rdquo;? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteDialog(false)}
+                className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 text-sm bg-red-500 text-white hover:bg-red-600 rounded"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <form action={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="name" className="block mb-1">Product Name</label>
-            <input type="text" id="name" name="name" required 
-              defaultValue={product?.name}
-              className="w-full p-2 border rounded" />
-          </div>
-
-          <div>
-            <label htmlFor="sku" className="block mb-1">SKU</label>
-            <input type="text" id="sku" name="sku" required 
-              defaultValue={product?.sku}
-              className="w-full p-2 border rounded" />
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="description" className="block mb-1">Description</label>
-          <textarea id="description" name="description" required 
-            defaultValue={product?.description}
-            className="w-full p-2 border rounded" rows={3} />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="price" className="block mb-1">Price</label>
-            <input type="number" id="price" name="price" step="0.01" required 
-              defaultValue={product?.price}
-              className="w-full p-2 border rounded" />
-          </div>
-
-          <div>
-            <label htmlFor="stock" className="block mb-1">Stock</label>
-            <input type="number" id="stock" name="stock" required 
-              defaultValue={product?.stock}
-              className="w-full p-2 border rounded" />
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="brand" className="block mb-1">Brand</label>
-          <input type="text" id="brand" name="brand" required 
-            defaultValue={product?.brand}
-            className="w-full p-2 border rounded" />
-        </div>
-
-        {/* Add hidden input for component type to maintain the value */}
-        <input 
-          type="hidden" 
-          name="componentType" 
-          value={product?.category.name} 
-        />
-
-        <div className="space-y-4 mt-8">
-          <div className="flex justify-between items-center">
-            <label className="text-lg font-medium">Product Images</label>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleImageChange}
-              className="hidden"
-              id="imageUpload"
-            />
-            <label
-              htmlFor="imageUpload"
-              className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer"
-            >
-              Add Images
-            </label>
-          </div>
-
-          <div className="grid grid-cols-4 gap-4">
-            {/* Existing images */}
-            {images.map((image) => (
-              <div key={image.id} className="relative group">
-                <div className="aspect-square relative border rounded overflow-hidden">
-                  <Image
-                    src={image.url || image.filePath}
-                    alt="Product"
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveExistingImage(image.id)}
-                    className="p-1 bg-red-500 text-white rounded-full mr-2"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSetMainImage(image.id)}
-                    className={`p-1 ${image.isMain ? 'bg-yellow-500' : 'bg-blue-500'} text-white rounded-full`}
-                  >
-                    {image.isMain ? 'Main' : 'Set Main'}
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {/* New images to be uploaded */}
-            {imageFiles.map((file, index) => (
-              <div key={index} className="relative group">
-                <div className="aspect-square relative border rounded overflow-hidden">
-                  <Image
-                    src={URL.createObjectURL(file)}
-                    alt="New product image"
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveImage(index)}
-                    className="p-1 bg-red-500 text-white rounded-full"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-4 mt-8">
-          <div className="flex justify-between items-center">
-            <label className="text-lg font-medium">Specifications</label>
-            <button 
-              type="button"
-              onClick={addSpec}
-              className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
-            >
-              Add Spec
-            </button>
-          </div>
-          
-          {specs.map((spec, index) => (
-            <div key={index} className="p-4 border rounded space-y-3 bg-gray-50">
-              <div className="flex justify-between">
-                <h4 className="font-medium">Specification #{index + 1}</h4>
-                <button 
-                  type="button"
-                  onClick={() => removeSpec(index)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  Remove
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block mb-1 text-sm">Name</label>
-                  <input
-                    type="text"
-                    value={spec.name}
-                    onChange={(e) => updateSpec(index, 'name', e.target.value)}
-                    className="w-full p-2 border rounded"
-                    placeholder="e.g., Clock Speed"
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 text-sm">Value</label>
-                  <input
-                    type="text"
-                    value={spec.value}
-                    onChange={(e) => updateSpec(index, 'value', e.target.value)}
-                    className="w-full p-2 border rounded"
-                    placeholder="e.g., 3.4"
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 text-sm">Unit (optional)</label>
-                  <input
-                    type="text"
-                    value={spec.unit || ''}
-                    onChange={(e) => updateSpec(index, 'unit', e.target.value || null)}
-                    className="w-full p-2 border rounded"
-                    placeholder="e.g., GHz"
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 text-sm">Group (optional)</label>
-                  <input
-                    type="text"
-                    value={spec.groupName || ''}
-                    onChange={(e) => updateSpec(index, 'groupName', e.target.value || null)}
-                    className="w-full p-2 border rounded"
-                    placeholder="e.g., Performance"
-                  />
-                </div>
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Left Column - Basic Info and Images */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="name" className="block mb-1 text-sm">Product Name</label>
+                <input type="text" id="name" name="name" required 
+                  defaultValue={product?.name}
+                  className="w-full p-2 border rounded" />
               </div>
 
               <div>
-                <label className="inline-flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={spec.isHighlight || false}
-                    onChange={(e) => updateSpec(index, 'isHighlight', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                  />
-                  <span className="ml-2 text-sm">Highlight this specification</span>
-                </label>
+                <label htmlFor="sku" className="block mb-1 text-sm">SKU</label>
+                <input type="text" id="sku" name="sku" required 
+                  defaultValue={product?.sku}
+                  className="w-full p-2 border rounded" />
               </div>
             </div>
-          ))}
-        </div>
 
-        <div className="space-y-4 mt-8">
-          <div>
-            <label className="text-lg font-medium mb-2 block">Tags</label>
-            <Tags 
-              selectedTags={tags} 
-              onTagsChange={setTags} 
-            />
+            <div>
+              <label htmlFor="description" className="block mb-1 text-sm">Description</label>
+              <textarea id="description" name="description" required 
+                defaultValue={product?.description}
+                className="w-full p-2 border rounded" rows={3} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="price" className="block mb-1 text-sm">Price</label>
+                <input type="number" id="price" name="price" step="0.01" required 
+                  defaultValue={product?.price}
+                  className="w-full p-2 border rounded" />
+              </div>
+
+              <div>
+                <label htmlFor="stock" className="block mb-1 text-sm">Stock</label>
+                <input type="number" id="stock" name="stock" required 
+                  defaultValue={product?.stock}
+                  className="w-full p-2 border rounded" />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="brand" className="block mb-1 text-sm">Brand</label>
+              <input type="text" id="brand" name="brand" required 
+                defaultValue={product?.brand}
+                className="w-full p-2 border rounded" />
+            </div>
+
+            {/* Hidden component type input */}
+            <input type="hidden" name="componentType" value={product?.category.name} />
+
+            {/* Images Section */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium">Product Images</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageChange}
+                  className="hidden"
+                  id="imageUpload"
+                />
+                <label
+                  htmlFor="imageUpload"
+                  className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer"
+                >
+                  Add Images
+                </label>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {/* Existing images */}
+                {images.map((image) => (
+                  <div key={image.id} className="relative group">
+                    <div className="aspect-square relative border rounded overflow-hidden">
+                      <Image
+                        src={image.url || image.filePath}
+                        alt="Product"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveExistingImage(image.id)}
+                        className="p-1 bg-red-500 text-white rounded-full mr-2"
+                      >
+                        ×
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetMainImage(image.id)}
+                        className={`p-1 ${image.isMain ? 'bg-yellow-500' : 'bg-blue-500'} text-white rounded-full text-xs`}
+                      >
+                        {image.isMain ? 'Main' : 'Set'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* New images */}
+                {imageFiles.map((file, index) => (
+                  <div key={index} className="relative group">
+                    <div className="aspect-square relative border rounded overflow-hidden">
+                      <Image
+                        src={URL.createObjectURL(file)}
+                        alt="New product image"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(index)}
+                        className="p-1 bg-red-500 text-white rounded-full"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-          
-          {/* Hidden input to include tags in form data */}
-          <input type="hidden" name="tags" value={JSON.stringify(tags)} />
+
+          {/* Right Column - Specs and Tags */}
+          <div className="space-y-4 min-w-[400px]">
+            {/* Specifications Section */}
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+              <div className="flex justify-between items-center sticky top-0 bg-white py-2">
+                <label className="text-sm font-medium">Specifications</label>
+                <button 
+                  type="button"
+                  onClick={addSpec}
+                  className="px-2 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                >
+                  Add Spec
+                </button>
+              </div>
+              
+              {specs.map((spec, index) => (
+                <div key={index} className="p-3 border rounded space-y-2 bg-gray-50">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-sm font-medium">{spec.name || `Spec #${index + 1}`}</h4>
+                    <button 
+                      type="button"
+                      onClick={() => removeSpec(index)}
+                      className="text-red-500 hover:text-red-700 text-sm"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <input
+                        type="text"
+                        value={spec.name}
+                        onChange={(e) => updateSpec(index, 'name', e.target.value)}
+                        className="w-full p-1.5 border rounded text-sm"
+                        placeholder="Name"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        value={spec.value}
+                        onChange={(e) => updateSpec(index, 'value', e.target.value)}
+                        className="w-full p-1.5 border rounded text-sm"
+                        placeholder="Value"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <input
+                        type="text"
+                        value={spec.unit || ''}
+                        onChange={(e) => updateSpec(index, 'unit', e.target.value || null)}
+                        className="w-full p-1.5 border rounded text-sm"
+                        placeholder="Unit (optional)"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        value={spec.groupName || ''}
+                        onChange={(e) => updateSpec(index, 'groupName', e.target.value || null)}
+                        className="w-full p-1.5 border rounded text-sm"
+                        placeholder="Group (optional)"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={spec.isHighlight || false}
+                        onChange={(e) => updateSpec(index, 'isHighlight', e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                      />
+                      <span className="ml-2 text-xs">Highlight</span>
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tags Section */}
+            <div className="mt-4">
+              <label className="text-sm font-medium mb-2 block">Tags</label>
+              <Tags 
+                selectedTags={tags} 
+                onTagsChange={setTags} 
+              />
+              <input type="hidden" name="tags" value={JSON.stringify(tags)} />
+            </div>
+          </div>
         </div>
 
         {error && (
-          <div className="p-3 bg-red-100 text-red-700 rounded">
+          <div className="p-3 bg-red-100 text-red-700 rounded text-sm">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="p-3 bg-green-100 text-green-700 rounded">
+          <div className="p-3 bg-green-100 text-green-700 rounded text-sm">
             Product updated successfully!
           </div>
         )}

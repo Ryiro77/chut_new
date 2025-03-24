@@ -34,10 +34,12 @@ export default function AdminProducts() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [searchResults, setSearchResults] = useState<Product[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [showResults, setShowResults] = useState(false)
 
   async function handleSearch(e: React.ChangeEvent<HTMLInputElement>) {
     const query = e.target.value
     setSearchQuery(query)
+    setShowResults(true)
     
     if (query.length >= 2) {
       setIsSearching(true)
@@ -56,10 +58,12 @@ export default function AdminProducts() {
 
   function handleSelectProduct(product: Product) {
     setSelectedProductId(product.id)
+    setShowResults(false)
+    setSearchQuery(product.name)  // Update search input with selected product name
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Product Management</h1>
         <div className="space-x-2">
@@ -69,6 +73,7 @@ export default function AdminProducts() {
               setSelectedProductId(null)
               setSearchQuery('')
               setSearchResults([])
+              setShowResults(false)
             }}
             className={`px-4 py-2 rounded ${
               view === 'add' 
@@ -95,54 +100,47 @@ export default function AdminProducts() {
         <AddProduct />
       ) : (
         <div>
-          <div className="mb-4">
+          <div className="relative mb-4">
             <input 
               type="text" 
               placeholder="Search products by name, SKU, or brand..."
               className="w-full p-2 border rounded"
               value={searchQuery}
               onChange={handleSearch}
+              onFocus={() => setShowResults(true)}
             />
+
+            {/* Dropdown for search results */}
+            {showResults && (searchResults.length > 0 || isSearching) && (
+              <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-96 overflow-y-auto">
+                {isSearching ? (
+                  <div className="text-gray-500 p-2">Searching...</div>
+                ) : (
+                  searchResults.map((product) => (
+                    <button
+                      key={product.id}
+                      onClick={() => handleSelectProduct(product)}
+                      className="w-full p-2 text-left hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
+                    >
+                      <div>
+                        <div className="font-medium">{product.name}</div>
+                        <div className="text-sm text-gray-500">
+                          SKU: {product.sku} • Brand: {product.brand}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">₹{product.price}</div>
+                        <div className="text-sm text-gray-500">{product.category.name}</div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
-          {isSearching && (
-            <div className="text-gray-500 my-4">Searching...</div>
-          )}
-
-          {/* Show search results if there's no selected product or there are search results */}
-          {searchResults.length > 0 && (
-            <div className="mb-4 border rounded divide-y">
-              {searchResults.map((product) => (
-                <button
-                  key={product.id}
-                  onClick={() => handleSelectProduct(product)}
-                  className="w-full p-2 text-left hover:bg-gray-50 flex justify-between items-center"
-                >
-                  <div>
-                    <div className="font-medium">{product.name}</div>
-                    <div className="text-sm text-gray-500">
-                      SKU: {product.sku} • Brand: {product.brand}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-medium">₹{product.price}</div>
-                    <div className="text-sm text-gray-500">{product.category.name}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
           {selectedProductId && (
-            <div>
-              <button
-                onClick={() => setSelectedProductId(null)}
-                className="mb-4 px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded flex items-center"
-              >
-                <span>← Back to Search</span>
-              </button>
-              <EditProduct productId={selectedProductId} />
-            </div>
+            <EditProduct productId={selectedProductId} />
           )}
         </div>
       )}
