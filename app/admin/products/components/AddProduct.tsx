@@ -1,68 +1,92 @@
 'use client'
 
 import { createProduct } from '../actions'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent } from "@/components/ui/card"
 
 const componentTypes = ['CPU', 'GPU', 'MOTHERBOARD', 'RAM', 'STORAGE', 'PSU', 'CASE', 'COOLER', 'OTHER'] as const
 
 export default function AddProduct() {
   return (
-    <div>
-      <h2 className="text-xl font-bold mb-4">Add New Product</h2>
-      <form action={createProduct} className="space-y-4">
-        <div>
-          <label htmlFor="name" className="block mb-1">Product Name</label>
-          <input type="text" id="name" name="name" required 
-            className="w-full p-2 border rounded" />
-        </div>
+    <Card>
+      <CardContent className="pt-6">
+        <h2 className="text-xl font-bold mb-6">Add New Product</h2>
+        <form action={createProduct} className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="name">Product Name</Label>
+              <Input id="name" name="name" required />
+            </div>
 
-        <div>
-          <label htmlFor="sku" className="block mb-1">SKU</label>
-          <input type="text" id="sku" name="sku" required 
-            className="w-full p-2 border rounded" />
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="sku">SKU</Label>
+              <Input id="sku" name="sku" required />
+            </div>
+          </div>
 
-        <div>
-          <label htmlFor="description" className="block mb-1">Description</label>
-          <textarea id="description" name="description" required 
-            className="w-full p-2 border rounded" rows={3} />
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea 
+              id="description" 
+              name="description" 
+              required 
+              rows={3}
+            />
+          </div>
 
-        <div>
-          <label htmlFor="price" className="block mb-1">Price</label>
-          <input type="number" id="price" name="price" step="0.01" required 
-            className="w-full p-2 border rounded" />
-        </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="price">Price</Label>
+              <Input 
+                type="number" 
+                id="price" 
+                name="price" 
+                step="0.01" 
+                required 
+              />
+            </div>
 
-        <div>
-          <label htmlFor="stock" className="block mb-1">Stock</label>
-          <input type="number" id="stock" name="stock" required 
-            className="w-full p-2 border rounded" />
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="stock">Stock</Label>
+              <Input 
+                type="number" 
+                id="stock" 
+                name="stock" 
+                required 
+              />
+            </div>
+          </div>
 
-        <div>
-          <label htmlFor="brand" className="block mb-1">Brand</label>
-          <input type="text" id="brand" name="brand" required 
-            className="w-full p-2 border rounded" />
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="brand">Brand</Label>
+            <Input id="brand" name="brand" required />
+          </div>
 
-        <div>
-          <label htmlFor="componentType" className="block mb-1">Component Type</label>
-          <select id="componentType" name="componentType" required 
-            className="w-full p-2 border rounded">
-            <option value="">Select a component type</option>
-            {componentTypes.map((type) => (
-              <option key={type} value={type}>
-                {type.charAt(0) + type.slice(1).toLowerCase().replace('_', ' ')}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="componentType">Component Type</Label>
+            <Select name="componentType" required>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a component type" />
+              </SelectTrigger>
+              <SelectContent>
+                {componentTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type.charAt(0) + type.slice(1).toLowerCase().replace('_', ' ')}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        <button type="submit" 
-          className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
-          Add Product
-        </button>
-      </form>
-    </div>
+          <Button type="submit" className="w-full">
+            Add Product
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   )
 }

@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { getTags, createTag, deleteTag } from '../actions'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Search, Plus, X } from 'lucide-react'
 
 type Tag = {
   id: string
@@ -98,66 +102,69 @@ export default function Tags({ selectedTags, onTagsChange }: TagsProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <div className="flex-1">
-          <input
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
             type="text"
             value={searchInput}
             onChange={handleSearchChange}
             placeholder="Search tags..."
-            className="w-full p-1.5 border rounded text-sm"
+            className="pl-8"
           />
         </div>
-        <input
-          type="text"
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="New tag..."
-          className="p-1.5 border rounded text-sm w-32"
-        />
-        <button
-          type="button"
-          onClick={handleAddTag}
-          className="px-2 py-1.5 text-sm bg-green-500 text-white rounded hover:bg-green-600 whitespace-nowrap"
-        >
-          Add
-        </button>
+        <div className="flex gap-2">
+          <Input
+            type="text"
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="New tag..."
+            className="w-32"
+          />
+          <Button
+            type="button"
+            onClick={handleAddTag}
+            size="icon"
+            variant="secondary"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {error && (
-        <div className="p-2 bg-red-100 text-red-700 rounded text-sm">
+        <div className="p-2 bg-destructive/10 text-destructive rounded text-sm">
           {error}
         </div>
       )}
 
       <div className="flex flex-wrap gap-1.5">
         {loading ? (
-          <div className="text-gray-500 text-sm">Loading tags...</div>
+          <div className="text-muted-foreground text-sm">Loading tags...</div>
         ) : allTags.length === 0 ? (
-          <div className="text-gray-500 text-sm">No tags found</div>
+          <div className="text-muted-foreground text-sm">No tags found</div>
         ) : (
           allTags.map((tag) => (
-            <div
+            <Badge
               key={tag.id}
-              className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer text-sm ${
-                selectedTags.includes(tag.name)
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-gray-100 text-gray-700'
-              }`}
+              variant={selectedTags.includes(tag.name) ? 'default' : 'outline'}
+              className="cursor-pointer"
               onClick={() => handleTagSelection(tag.name)}
             >
-              <span>{tag.name}</span>
-              <button
+              {tag.name}
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
+                className="h-4 w-4 p-0 ml-1 hover:bg-transparent"
                 onClick={(e) => {
                   e.stopPropagation()
                   handleDeleteTag(tag.id, tag.name)
                 }}
-                className="ml-1 text-red-500 hover:text-red-700"
               >
-                ×
-              </button>
-            </div>
+                <X className="h-3 w-3" />
+              </Button>
+            </Badge>
           ))
         )}
       </div>

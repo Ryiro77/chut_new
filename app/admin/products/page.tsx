@@ -4,6 +4,10 @@ import { useState } from 'react'
 import { searchProducts } from './actions'
 import AddProduct from './components/AddProduct'
 import EditProduct from './components/EditProduct'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 type Product = {
   id: string
@@ -11,11 +15,11 @@ type Product = {
   sku: string
   description: string
   brand: string
-  price: number // Changed from Decimal to number
+  price: number
   stock: number
   categoryId: string
-  createdAt: string // Changed from Date to string
-  updatedAt: string // Changed from Date to string
+  createdAt: string
+  updatedAt: string
   category: {
     id: string
     name: string
@@ -59,7 +63,7 @@ export default function AdminProducts() {
   function handleSelectProduct(product: Product) {
     setSelectedProductId(product.id)
     setShowResults(false)
-    setSearchQuery(product.name)  // Update search input with selected product name
+    setSearchQuery(product.name)
   }
 
   return (
@@ -67,7 +71,7 @@ export default function AdminProducts() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Product Management</h1>
         <div className="space-x-2">
-          <button 
+          <Button 
             onClick={() => {
               setView('add')
               setSelectedProductId(null)
@@ -75,24 +79,16 @@ export default function AdminProducts() {
               setSearchResults([])
               setShowResults(false)
             }}
-            className={`px-4 py-2 rounded ${
-              view === 'add' 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-gray-200 hover:bg-gray-300'
-            }`}
+            variant={view === 'add' ? 'default' : 'secondary'}
           >
             Add Product
-          </button>
-          <button 
+          </Button>
+          <Button 
             onClick={() => setView('edit')}
-            className={`px-4 py-2 rounded ${
-              view === 'edit' 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-gray-200 hover:bg-gray-300'
-            }`}
+            variant={view === 'edit' ? 'default' : 'secondary'}
           >
             Edit Product
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -101,10 +97,9 @@ export default function AdminProducts() {
       ) : (
         <div>
           <div className="relative mb-4">
-            <input 
+            <Input 
               type="text" 
               placeholder="Search products by name, SKU, or brand..."
-              className="w-full p-2 border rounded"
               value={searchQuery}
               onChange={handleSearch}
               onFocus={() => setShowResults(true)}
@@ -112,30 +107,35 @@ export default function AdminProducts() {
 
             {/* Dropdown for search results */}
             {showResults && (searchResults.length > 0 || isSearching) && (
-              <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-96 overflow-y-auto">
-                {isSearching ? (
-                  <div className="text-gray-500 p-2">Searching...</div>
-                ) : (
-                  searchResults.map((product) => (
-                    <button
-                      key={product.id}
-                      onClick={() => handleSelectProduct(product)}
-                      className="w-full p-2 text-left hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
-                    >
-                      <div>
-                        <div className="font-medium">{product.name}</div>
-                        <div className="text-sm text-gray-500">
-                          SKU: {product.sku} • Brand: {product.brand}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-medium">₹{product.price}</div>
-                        <div className="text-sm text-gray-500">{product.category.name}</div>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
+              <Card className="absolute z-10 w-full mt-1">
+                <ScrollArea className="max-h-[400px]">
+                  {isSearching ? (
+                    <div className="p-3 text-muted-foreground">Searching...</div>
+                  ) : (
+                    <div className="divide-y">
+                      {searchResults.map((product) => (
+                        <Button
+                          key={product.id}
+                          onClick={() => handleSelectProduct(product)}
+                          variant="ghost"
+                          className="w-full justify-between h-auto py-3 px-4"
+                        >
+                          <div className="text-left">
+                            <div className="font-medium">{product.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              SKU: {product.sku} • Brand: {product.brand}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-medium">₹{product.price}</div>
+                            <div className="text-sm text-muted-foreground">{product.category.name}</div>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </Card>
             )}
           </div>
 
