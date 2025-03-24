@@ -68,6 +68,7 @@ export async function createProduct(formData: FormData) {
   const sku = formData.get('sku') as string
   const componentType = formData.get('componentType') as ComponentType
   const specs = JSON.parse(formData.get('specs') as string || '[]') as SpecInput[]
+  const tags = JSON.parse(formData.get('tags') as string || '[]') as string[]
 
   try {
     const category = await prisma.category.upsert({
@@ -99,11 +100,17 @@ export async function createProduct(formData: FormData) {
             isHighlight: spec.isHighlight || false,
             sortOrder: spec.sortOrder || 0
           }))
+        },
+        tags: {
+          create: tags.map(name => ({
+            name: name.toLowerCase()
+          }))
         }
       },
       include: {
         specs: true,
-        category: true
+        category: true,
+        tags: true
       }
     })
     
@@ -181,6 +188,25 @@ export async function updateProduct(id: string, formData: FormData) {
       }
     }
 
+    // Find or create tags first
+    const tagConnections = await Promise.all(
+      tags.map(async (tagName) => {
+        const normalizedName = tagName.toLowerCase()
+        const existingTag = await prisma.productTag.findUnique({
+          where: { name: normalizedName }
+        })
+        
+        if (existingTag) {
+          return { id: existingTag.id }
+        }
+        
+        const newTag = await prisma.productTag.create({
+          data: { name: normalizedName }
+        })
+        return { id: newTag.id }
+      })
+    )
+
     // Update product with all changes
     await prisma.product.update({
       where: { id },
@@ -222,10 +248,7 @@ export async function updateProduct(id: string, formData: FormData) {
           }))
         },
         tags: {
-          deleteMany: {},
-          create: tags.map(name => ({
-            name
-          }))
+          set: tagConnections
         }
       }
     })
@@ -316,5 +339,52 @@ export async function searchProducts(query: string) {
   } catch (error) {
     console.error('Error searching products:', error)
     throw new Error('Failed to search products')
+  }
+}
+
+export async function getTags(search?: string) {
+  try {
+    return await prisma.productTag.findMany({
+      where: search ? {
+        name: {
+          contains: search.toLowerCase(),
+        }
+      } : undefined,
+      orderBy: {
+        name: 'asc'
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching tags:', error)
+    throw new Error('Failed to fetch tags')
+  }
+}
+
+export async function createTag(name: string) {
+  try {
+    return await prisma.productTag.create({
+      data: {
+        name: name.toLowerCase(),
+      }
+    })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        throw new Error('Tag already exists')
+      }
+    }
+    console.error('Error creating tag:', error)
+    throw new Error('Failed to create tag')
+  }
+}
+
+export async function deleteTag(id: string) {
+  try {
+    await prisma.productTag.delete({
+      where: { id }
+    })
+  } catch (error) {
+    console.error('Error deleting tag:', error)
+    throw new Error('Failed to delete tag')
   }
 }

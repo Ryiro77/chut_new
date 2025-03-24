@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getProduct, updateProduct } from '../actions'
 import Image from 'next/image'
+import Tags from './Tags'
 
 // const componentTypes = ['CPU', 'GPU', 'MOTHERBOARD', 'RAM', 'STORAGE', 'PSU', 'CASE', 'COOLER', 'OTHER'] as const
 
@@ -55,7 +56,6 @@ export default function EditProduct({ productId }: { productId: string }) {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [mainImageId, setMainImageId] = useState<string | null>(null)
   const [tags, setTags] = useState<string[]>([])
-  const [tagInput, setTagInput] = useState('')
 
   useEffect(() => {
     const loadProduct = async () => {
@@ -157,24 +157,6 @@ export default function EditProduct({ productId }: { productId: string }) {
     const newSpecs = [...specs]
     newSpecs[index] = { ...newSpecs[index], [field]: value }
     setSpecs(newSpecs)
-  }
-
-  const handleAddTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()])
-      setTagInput('')
-    }
-  }
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter(tag => tag !== tagToRemove))
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleAddTag()
-    }
   }
 
   if (!product || loading) return <div className="animate-pulse">Loading...</div>
@@ -401,40 +383,12 @@ export default function EditProduct({ productId }: { productId: string }) {
         </div>
 
         <div className="space-y-4 mt-8">
-          <div className="flex justify-between items-center">
-            <label className="text-lg font-medium">Tags</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Add a tag..."
-                className="p-2 border rounded"
-              />
-              <button
-                type="button"
-                onClick={handleAddTag}
-                className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
-              >
-                Add
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            {tags.map((tag) => (
-              <div key={tag} className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
-                <span>{tag}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveTag(tag)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+          <div>
+            <label className="text-lg font-medium mb-2 block">Tags</label>
+            <Tags 
+              selectedTags={tags} 
+              onTagsChange={setTags} 
+            />
           </div>
           
           {/* Hidden input to include tags in form data */}
