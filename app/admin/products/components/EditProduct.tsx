@@ -46,6 +46,14 @@ type Product = {
   tags: { id: string; name: string }[]
 }
 
+const defaultCpuSpecs: Spec[] = [
+  { name: 'Socket', value: '', sortOrder: 0, isHighlight: true },
+  { name: 'Cores', value: '', sortOrder: 1, isHighlight: true },
+  { name: 'Threads', value: '', sortOrder: 2, isHighlight: true },
+  { name: 'Clock Speed', value: '', unit: 'GHz', sortOrder: 3, isHighlight: true },
+  { name: 'Cache Size', value: '', unit: 'MB', sortOrder: 4, isHighlight: true }
+]
+
 export default function EditProduct({ productId }: { productId: string }) {
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
@@ -63,7 +71,14 @@ export default function EditProduct({ productId }: { productId: string }) {
         const data = await getProduct(productId)
         if (data) {
           setProduct(data as Product)
-          setSpecs(data.specs || [])
+          
+          // If it's a CPU and there are no specs, add the default CPU specs
+          if (data.category.name === 'CPU' && (!data.specs || data.specs.length === 0)) {
+            setSpecs(defaultCpuSpecs)
+          } else {
+            setSpecs(data.specs || [])
+          }
+          
           setImages(data.images || [])
           const mainImage = data.images?.find(img => img.isMain)
           setMainImageId(mainImage?.id || null)
