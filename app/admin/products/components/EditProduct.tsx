@@ -54,6 +54,56 @@ const defaultCpuSpecs: Spec[] = [
   { name: 'Cache Size', value: '', unit: 'MB', sortOrder: 4, isHighlight: true }
 ]
 
+const defaultGpuSpecs: Spec[] = [
+  { name: 'Chipset', value: '', sortOrder: 0, isHighlight: true },
+  { name: 'VRAM', value: '', unit: 'GB', sortOrder: 1, isHighlight: true },
+  { name: 'Clock Speed', value: '', unit: 'MHz', sortOrder: 2, isHighlight: true },
+  { name: 'Interface', value: '', sortOrder: 3, isHighlight: true }
+]
+
+const defaultMotherboardSpecs: Spec[] = [
+  { name: 'Socket Compatibility', value: '', sortOrder: 0, isHighlight: true },
+  { name: 'Chipset', value: '', sortOrder: 1, isHighlight: true },
+  { name: 'RAM Slots', value: '', sortOrder: 2, isHighlight: true },
+  { name: 'PCIe Slots', value: '', sortOrder: 3, isHighlight: true },
+  { name: 'M.2 Slots', value: '', sortOrder: 4, isHighlight: true },
+  { name: 'Form Factor', value: '', sortOrder: 5, isHighlight: true }
+]
+
+const defaultRamSpecs: Spec[] = [
+  { name: 'Capacity', value: '', unit: 'GB', sortOrder: 0, isHighlight: true },
+  { name: 'Speed', value: '', unit: 'MHz', sortOrder: 1, isHighlight: true },
+  { name: 'Type', value: '', sortOrder: 2, isHighlight: true },
+  { name: 'Latency', value: 'CL', sortOrder: 3, isHighlight: true }
+]
+
+const defaultStorageSpecs: Spec[] = [
+  { name: 'Type', value: '', sortOrder: 0, isHighlight: true },
+  { name: 'Capacity', value: '', unit: 'GB', sortOrder: 1, isHighlight: true },
+  { name: 'Interface', value: '', sortOrder: 2, isHighlight: true },
+  { name: 'Speed', value: '', unit: 'MB/s', sortOrder: 3, isHighlight: true }
+]
+
+const defaultCoolerSpecs: Spec[] = [
+  { name: 'Type', value: '', sortOrder: 0, isHighlight: true },
+  { name: 'Socket Compatibility', value: '', sortOrder: 1, isHighlight: true },
+  { name: 'TDP', value: '', unit: 'W', sortOrder: 2, isHighlight: true },
+  { name: 'Noise Level', value: '', unit: 'dBA', sortOrder: 3, isHighlight: true }
+]
+
+const defaultCaseSpecs: Spec[] = [
+  { name: 'Form Factor', value: '', sortOrder: 0, isHighlight: true },
+  { name: 'Airflow', value: '', sortOrder: 1, isHighlight: true },
+  { name: 'Expansion Slots', value: '', sortOrder: 2, isHighlight: true }
+]
+
+const defaultPsuSpecs: Spec[] = [
+  { name: 'Wattage', value: '', unit: 'W', sortOrder: 0, isHighlight: true },
+  { name: 'Efficiency Rating', value: '', sortOrder: 1, isHighlight: true },
+  { name: 'Modularity', value: '', sortOrder: 2, isHighlight: true },
+  { name: 'Connectors', value: '', sortOrder: 3, isHighlight: true }
+]
+
 export default function EditProduct({ productId }: { productId: string }) {
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
@@ -73,11 +123,38 @@ export default function EditProduct({ productId }: { productId: string }) {
         if (data) {
           setProduct(data as Product)
           
-          // If it's a CPU and there are no specs, add the default CPU specs
-          if (data.category.name === 'CPU' && (!data.specs || data.specs.length === 0)) {
-            setSpecs(defaultCpuSpecs)
+          // If the product has no specs, add default specs based on category
+          if (!data.specs || data.specs.length === 0) {
+            switch (data.category.name) {
+              case 'CPU':
+                setSpecs(defaultCpuSpecs)
+                break
+              case 'GPU':
+                setSpecs(defaultGpuSpecs)
+                break
+              case 'MOTHERBOARD':
+                setSpecs(defaultMotherboardSpecs)
+                break
+              case 'RAM':
+                setSpecs(defaultRamSpecs)
+                break
+              case 'STORAGE':
+                setSpecs(defaultStorageSpecs)
+                break
+              case 'COOLER':
+                setSpecs(defaultCoolerSpecs)
+                break
+              case 'CASE':
+                setSpecs(defaultCaseSpecs)
+                break
+              case 'PSU':
+                setSpecs(defaultPsuSpecs)
+                break
+              default:
+                setSpecs([])
+            }
           } else {
-            setSpecs(data.specs || [])
+            setSpecs(data.specs)
           }
           
           setImages(data.images || [])
