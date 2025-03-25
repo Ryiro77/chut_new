@@ -196,7 +196,7 @@ export default function ProductsContent() {
           <div className="flex flex-col md:flex-row gap-6">
             {/* Component Type Selection */}
             <div className="w-full md:w-64 space-y-6">
-              <div>
+              {/* <div>
                 <h2 className="text-lg font-semibold mb-4">Component Type</h2>
                 <div className="space-y-2">
                   {componentTypes.map(type => (
@@ -213,7 +213,7 @@ export default function ProductsContent() {
                     </Button>
                   ))}
                 </div>
-              </div>
+              </div> */}
 
               <div>
                 <h2 className="text-lg font-semibold mb-4">Filters</h2>
