@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Header } from "@/components/Header"
 import { Footer } from "@/components/Footer"
 import { Container } from "@/components/ui/container"
@@ -9,39 +10,10 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
-import { Plus } from "lucide-react"
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  brand: string;
-  description: string;
-  category: {
-    name: string;
-  };
-}
-
-// We'll create the API functions directly here until we set up the API properly
-async function getProducts({ category, search }: { category?: string; search?: string }) {
-  const params = new URLSearchParams();
-  if (category) params.append('category', category);
-  if (search) params.append('search', search);
-
-  const response = await fetch(`/api/products?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch products');
-  }
-  return response.json() as Promise<Product[]>;
-}
-
-type Component = {
-  type: string;
-  id: string | null;
-  name: string | null;
-  price: number | null;
-  brand: string | null;
-};
+import { Plus, Loader2 } from "lucide-react"
+import { toast } from "sonner"
+import { Product, Component } from '@/lib/types'
+import { getProducts, addToCart } from '@/lib/api-client'
 
 interface SelectComponentDialogProps {
   open: boolean;
@@ -55,27 +27,26 @@ function SelectComponentDialog({ open, onOpenChange, componentType, onSelect }: 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Fetch products when search query changes
-  useEffect(() => {
-    const fetchProducts = async () => {
-      if (!searchQuery && !componentType) return;
-      setLoading(true);
-      try {
-        const data = await getProducts({
-          category: componentType,
-          search: searchQuery,
-        });
-        setProducts(data);
-      } catch (error) {
-        console.error('Failed to fetch products:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchProducts = useCallback(async () => {
+    if (!searchQuery && !componentType) return;
+    setLoading(true);
+    try {
+      const data = await getProducts({
+        category: componentType,
+        search: searchQuery,
+      });
+      setProducts(data);
+    } catch (error) {
+      console.error('Failed to fetch products:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery, componentType]);
 
+  useEffect(() => {
     const debounceTimer = setTimeout(fetchProducts, 300);
     return () => clearTimeout(debounceTimer);
-  }, [searchQuery, componentType]);
+  }, [fetchProducts]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -139,6 +110,8 @@ export default function PCBuilderPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState('');
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const getTotalPrice = () => {
     return Object.values(components)
@@ -176,6 +149,41 @@ export default function PCBuilderPage() {
     }));
   };
 
+  const handleAddToCart = async () => {
+    // Check if any component is selected
+    const hasComponents = Object.values(components).some(comp => comp.id !== null);
+    if (!hasComponents) {
+      toast.error("Please select at least one component for your build");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const buildComponents = Object.values(components)
+        .filter(comp => comp.id !== null)
+        .map(comp => ({
+          id: comp.id!,
+          name: comp.name!,
+          price: comp.price!,
+          brand: comp.brand!
+        }));
+      
+      await addToCart(
+        buildComponents,
+        true,
+        `Custom PC Build (${new Date().toLocaleDateString()})`
+      );
+      
+      toast.success("Your custom build has been added to cart");
+      router.push('/cart');
+    } catch (error) {
+      console.error('Failed to add to cart:', error);
+      toast.error("Failed to add items to cart. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -204,8 +212,8 @@ export default function PCBuilderPage() {
                         )}
                         <Button 
                           variant="outline" 
-                            size="sm"
-                            onClick={() => handleSelectComponent(key)}
+                          size="sm"
+                          onClick={() => handleSelectComponent(key)}
                         >
                           <Plus className="h-4 w-4 mr-2" />
                           {component.name ? 'Change' : 'Add'}
@@ -268,6 +276,23 @@ export default function PCBuilderPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Add to Cart Button */}
+                    <Button 
+                      className="w-full mt-4" 
+                      size="lg"
+                      onClick={handleAddToCart}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Adding to Cart...
+                        </>
+                      ) : (
+                        'Add Build to Cart'
+                      )}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

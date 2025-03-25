@@ -18,6 +18,7 @@ model User {
   phone         String    @unique
   name          String?
   email         String?   @unique
+  password      String?   // Adding password field for authentication
   address       String?
   isVerified    Boolean   @default(false)
   createdAt     DateTime  @default(now())
@@ -28,6 +29,9 @@ model User {
   sharedBuilds  SharedBuild[]
   profilePicture String?
   bio           String?   @db.Text
+  otpVerification OTPVerification[]
+
+  @@index([phone])
 }
 
 model Product {
@@ -140,6 +144,10 @@ model Order {
   appliedDiscount Discount?   @relation(fields: [discountId], references: [id])
   discountId      String?
   notes           String?     @db.Text
+  razorpayOrderId String?     @unique
+  razorpayPaymentId String?
+  paidAt          DateTime?
+  shippingAddress ShippingAddress?
 
   @@index([userId])
 }
@@ -175,6 +183,11 @@ model OrderItem {
   product     Product   @relation(fields: [productId], references: [id])
   quantity    Int
   price       Decimal   @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now())
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 model CartItem {
@@ -193,8 +206,11 @@ model OTPVerification {
   createdAt   DateTime  @default(now())
   expiresAt   DateTime
   verified    Boolean   @default(false)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
 
   @@index([phone, otp])
+  @@index([userId])
 }
 
 model ProductSpecification {
@@ -212,11 +228,29 @@ model ProductSpecification {
   @@unique([productId, name])  // Prevent duplicate spec names for the same product
 }
 
+model ShippingAddress {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id])
+  fullName  String
+  email     String
+  phone     String
+  address   String
+  city      String
+  state     String
+  pincode   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+}
+
 enum OrderStatus {
   PENDING
   PROCESSING
   COMPLETED
   CANCELLED
+  CONFIRMED
+  SHIPPED
+  DELIVERED
 }
 
 enum PaymentStatus {
@@ -224,6 +258,8 @@ enum PaymentStatus {
   COMPLETED
   FAILED
   REFUNDED
+  PAID
+  COD
 }
 
 enum ComponentType {

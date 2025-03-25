@@ -1,17 +1,12 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
-import { ThemeProvider } from "../components/theme-provider"
-import "./globals.css"
+import { Inter, Urbanist } from 'next/font/google'
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/sonner"
+import { NextAuthProvider } from "@/components/providers"
+import './globals.css'
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-})
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-})
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const urbanist = Urbanist({ subsets: ['latin'], variable: '--font-urbanist' })
 
 export const metadata: Metadata = {
   title: "PC Builder - Custom PC Parts & Builds",
@@ -25,15 +20,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+      <body className={`${urbanist.variable} ${inter.variable} antialiased`}>
+        <NextAuthProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+            <Toaster />
+          </ThemeProvider>
+        </NextAuthProvider>
       </body>
     </html>
   )

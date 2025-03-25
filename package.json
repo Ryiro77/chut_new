@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@auth/core": "^0.38.0",
     "@auth/prisma-adapter": "^2.8.0",
     "@prisma/client": "^6.5.0",
     "@radix-ui/react-checkbox": "^1.1.4",
@@ -20,6 +21,7 @@
     "@radix-ui/react-slider": "^1.2.3",
     "@radix-ui/react-slot": "^1.1.2",
     "@types/uuid": "^10.0.0",
+    "bcrypt": "^5.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -29,15 +31,20 @@
     "next-auth": "^4.24.11",
     "next-themes": "^0.4.6",
     "prisma": "^6.5.0",
+    "providers": "^0.5.0",
+    "razorpay": "^2.9.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sonner": "^2.0.1",
     "tailwind-merge": "^3.0.2",
     "tw-animate-css": "^1.2.4",
+    "twilio": "^5.5.1",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/bcrypt": "^5.0.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
