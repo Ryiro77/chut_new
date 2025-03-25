@@ -1,9 +1,12 @@
+'use client'
+
 import Link from "next/link"
 import { User, ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Container } from "@/components/ui/container"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { SearchBar } from "@/components/SearchBar"
+import { useRouter, usePathname } from "next/navigation"
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -24,34 +27,37 @@ const categories = [
   { name: "Power Supplies", href: "/products?category=psu", type: "PSU" },
   { name: "Cases", href: "/products?category=case", type: "CASE" },
   { name: "Coolers", href: "/products?category=cooler", type: "COOLER" },
-  { name: "Other", href: "/products?category=other", type: "OTHER" },
-]
+] as const
 
 export function Header() {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const handleCategoryClick = (href: string, e: React.MouseEvent) => {
+    if (pathname === '/products') {
+      e.preventDefault()
+      router.push(href, { scroll: false })
+    }
+  }
+
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      {/* Top Section */}
+    <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      {/* Top Section - Logo, Search, User Controls */}
       <Container>
-        <div className="flex h-16 items-center gap-4">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/computerhutlogo.png"
-              alt="PC Builder Logo"
-              width={40}
-              height={40}
-              className="rounded-lg"
-            />
-            <span className="text-xl font-bold">PC Builder</span>
-          </Link>
-          
-          <div className="flex-1 flex justify-center">
+        <div className="flex h-16 items-center justify-between">
+          <div className="flex gap-6 md:gap-10">
+            <Link href="/" className="flex items-center space-x-2">
+              <Image src="/computerhutlogo.png" alt="Computer Hut Logo" width={32} height={32} />
+              <span className="inline-block font-bold">Computer Hut</span>
+            </Link>
+
             <SearchBar />
           </div>
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Button variant="ghost" size="icon" asChild>
-              <Link href="/auth">
+              <Link href="/account">
                 <User className="h-5 w-5" />
                 <span className="sr-only">Account</span>
               </Link>
@@ -80,6 +86,7 @@ export function Header() {
                         <NavigationMenuLink asChild>
                           <Link
                             href={category.href}
+                            onClick={(e) => handleCategoryClick(category.href, e)}
                             className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
                           >
                             <div className="text-sm font-medium leading-none">{category.name}</div>
@@ -103,14 +110,6 @@ export function Header() {
                 <Link href="/about" legacyBehavior passHref>
                   <NavigationMenuLink className={navigationMenuTriggerStyle()}>
                     About
-                  </NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem>
-
-              <NavigationMenuItem>
-                <Link href="/support" legacyBehavior passHref>
-                  <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                    Support
                   </NavigationMenuLink>
                 </Link>
               </NavigationMenuItem>

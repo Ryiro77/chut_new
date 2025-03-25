@@ -11,6 +11,12 @@ export interface Product {
     name: string;
     value: string;
   }>;
+  images: Array<{
+    id: string;
+    url: string | null;
+    filePath: string;
+    isMain: boolean;
+  }>;
 }
 
 export interface CartItem {
@@ -36,6 +42,7 @@ export interface Component {
   name: string | null;
   price: number | null;
   brand: string | null;
+  image?: string;
 }
 
 export interface Order {
@@ -47,7 +54,7 @@ export interface Order {
   razorpayPaymentId?: string;
   paidAt?: Date;
   shippingAddress: ShippingAddress;
-  items: OrderItem[];
+  items: OrderItem[]; 
 }
 
 export interface ShippingAddress {
