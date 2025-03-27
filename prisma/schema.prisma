@@ -30,6 +30,7 @@ model User {
   profilePicture String?
   bio           String?   @db.Text
   otpVerification OTPVerification[]
+  reviews       ProductReview[]
 
   @@index([phone])
 }
@@ -39,12 +40,15 @@ model Product {
   sku         String         @unique
   name        String
   description String         @db.Text
-  price       Decimal        @db.Decimal(10, 2)
+  regularPrice Decimal      @db.Decimal(10, 2)
+  discountedPrice Decimal?  @db.Decimal(10, 2)
+  discountPercentage Float? @db.Float
+  isOnSale    Boolean      @default(false)
   stock       Int           @default(0)
   images      ProductImage[]
   categoryId  String
   category    Category      @relation(fields: [categoryId], references: [id])
-  specs       ProductSpecification[]  // Changed from Json? to relation
+  specs       ProductSpecification[]
   brand       String
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -52,6 +56,11 @@ model Product {
   cartItems   CartItem[]
   buildItems  BuildItem[]
   tags        ProductTag[]
+  reviews     ProductReview[]
+  averageRating Float?      @db.Float
+  reviewCount   Int         @default(0)
+
+  @@index([categoryId])
 }
 
 model ProductTag {
@@ -191,12 +200,18 @@ model OrderItem {
 }
 
 model CartItem {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  productId   String
-  product     Product   @relation(fields: [productId], references: [id])
-  quantity    Int
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id])
+  quantity        Int
+  customBuildName String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now())
+
+  @@index([userId])
+  @@index([productId])
 }
 
 model OTPVerification {
@@ -226,6 +241,22 @@ model ProductSpecification {
 
   @@index([productId])
   @@unique([productId, name])  // Prevent duplicate spec names for the same product
+}
+
+model ProductReview {
+  id          String    @id @default(cuid())
+  rating      Int       @db.Int // Rating from 1-5
+  comment     String    @db.Text
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([productId])
+  @@unique([userId, productId]) // One review per product per user
 }
 
 model ShippingAddress {

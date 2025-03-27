@@ -1,7 +1,10 @@
 export interface Product {
   id: string;
   name: string;
-  price: number;
+  regularPrice: number;
+  discountedPrice?: number;
+  discountPercentage?: number;
+  isOnSale: boolean;
   brand: string;
   description: string;
   category: {
@@ -40,9 +43,12 @@ export interface Component {
   type: string;
   id: string | null;
   name: string | null;
-  price: number | null;
+  regularPrice?: number | null;
+  discountedPrice?: number | null;
+  price: number | null;  // Effective price (either discounted or regular)
   brand: string | null;
   image?: string;
+  isOnSale?: boolean;
 }
 
 export interface Order {

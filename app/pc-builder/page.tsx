@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image';
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { Header } from "@/components/Header"
@@ -15,7 +16,6 @@ import { toast } from "sonner"
 import { Product, Component } from '@/lib/types'
 import { getProducts } from './actions'
 import { addToCart } from '@/lib/api-client'
-import Image from "next/image"
 
 interface SelectComponentDialogProps {
   open: boolean;
@@ -80,26 +80,22 @@ function SelectComponentDialog({ open, onOpenChange, componentType, onSelect }: 
                     onOpenChange(false);
                   }}>
                     <CardHeader className="p-4">
-                      <div className="flex items-start gap-4">
-                        {product.images && product.images.length > 0 && (
-                          <div className="relative h-20 w-20 flex-shrink-0">
-                            <Image
-                              src={product.images.find(img => img.isMain)?.url || 
-                                  product.images.find(img => img.isMain)?.filePath ||
-                                  product.images[0]?.url || 
-                                  product.images[0]?.filePath || 
-                                  '/no-image.png'}
-                              alt={product.name}
-                              fill
-                              className="object-contain"
-                            />
+                      <div className="flex-1">
+                        <h4 className="font-medium">{product.name}</h4>
+                        <p className="text-sm text-muted-foreground">{product.brand}</p>
+                        {product.isOnSale && product.discountedPrice ? (
+                          <div className="mt-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">₹{product.discountedPrice.toLocaleString()}</span>
+                              <span className="text-sm text-muted-foreground line-through">₹{product.regularPrice.toLocaleString()}</span>
+                            </div>
+                            <div className="text-sm text-green-600">
+                              {Math.round(product.discountPercentage || 0)}% off
+                            </div>
                           </div>
+                        ) : (
+                          <p className="font-medium mt-1">₹{product.regularPrice.toLocaleString()}</p>
                         )}
-                        <div className="flex-1">
-                          <h4 className="font-medium">{product.name}</h4>
-                          <p className="text-sm text-muted-foreground">{product.brand}</p>
-                          <p className="font-medium mt-1">₹{product.price.toLocaleString()}</p>
-                        </div>
                       </div>
                     </CardHeader>
                   </Card>
@@ -130,6 +126,23 @@ export default function PCBuilderPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const getImageUrl = (image: { url?: string | null, filePath?: string | null } | undefined) => {
+    if (!image) {
+      return '/no-image.png';
+    }
+
+    if (image.url) {
+      return image.url.startsWith('/') ? image.url : `/${image.url}`;
+    }
+
+    if (image.filePath) {
+      const cleanPath = image.filePath.replace(/^\/uploads\//, '').replace(/^uploads\//, '');
+      return `/uploads/${cleanPath}`;
+    }
+
+    return '/no-image.png';
+  };
+
   // Handle URL parameters for adding components
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -144,19 +157,16 @@ export default function PCBuilderPage() {
           const product = data.find((p: Product) => p.id === productId);
           
           if (product) {
+            const mainImage = product.images?.find((img: { isMain: boolean }) => img.isMain) || product.images?.[0];
             setComponents(prev => ({
               ...prev,
               [componentType.toLowerCase()]: {
                 type: componentType,
                 id: product.id,
                 name: product.name,
-                price: product.price,
+                price: product.isOnSale && product.discountedPrice ? product.discountedPrice : product.regularPrice,
                 brand: product.brand,
-                image: product.images?.find((img: { isMain: boolean }) => img.isMain)?.url || 
-                       product.images?.find((img: { isMain: boolean }) => img.isMain)?.filePath ||
-                       product.images?.[0]?.url ||
-                       product.images?.[0]?.filePath ||
-                       '/no-image.png'
+                image: mainImage ? getImageUrl(mainImage) : '/no-image.png'
               }
             }));
             // Clear the URL parameters after adding the component
@@ -183,19 +193,16 @@ export default function PCBuilderPage() {
   };
 
   const handleComponentSelect = (product: Product) => {
+    const mainImage = product.images?.find((img: { isMain: boolean }) => img.isMain) || product.images?.[0];
     setComponents(prev => ({
       ...prev,
       [selectedType.toLowerCase()]: {
         type: selectedType,
         id: product.id,
         name: product.name,
-        price: product.price,
+        price: product.isOnSale && product.discountedPrice ? product.discountedPrice : product.regularPrice,
         brand: product.brand,
-        image: product.images?.find((img: { isMain: boolean }) => img.isMain)?.url || 
-               product.images?.find((img: { isMain: boolean }) => img.isMain)?.filePath ||
-               product.images?.[0]?.url ||
-               product.images?.[0]?.filePath ||
-               '/no-image.png'
+        image: mainImage ? getImageUrl(mainImage) : '/no-image.png'
       }
     }));
   };
@@ -228,8 +235,10 @@ export default function PCBuilderPage() {
         .map(comp => ({
           id: comp.id!,
           name: comp.name!,
-          price: comp.price!,
-          brand: comp.brand!
+          brand: comp.brand!,
+          regularPrice: comp.price!,
+          discountedPrice: undefined,  // Changed from null to undefined to match type
+          isOnSale: false
         }));
       
       await addToCart(
@@ -289,13 +298,15 @@ export default function PCBuilderPage() {
                       {component.name ? (
                         <div className="flex items-center gap-4">
                           {component.image && (
-                            <div className="relative w-12 h-12 flex-shrink-0 bg-muted rounded-md overflow-hidden">
+                            <div className="relative w-16 h-16 rounded-lg overflow-hidden">
+                              
+                              
                               <Image
                                 src={component.image}
                                 alt={component.name}
-                                fill
-                                sizes="48px"
-                                className="object-contain p-1"
+                                className="object-cover w-full h-full"
+                                layout="fill"
+                                objectFit="cover"
                               />
                             </div>
                           )}

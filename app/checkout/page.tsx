@@ -16,6 +16,12 @@ import { toast } from "sonner"
 import { CartItem, CheckoutFormData } from '@/lib/types'
 import { getCartItems, checkout } from '@/lib/api-client'
 
+const formatPrice = (price: number) => {
+  return new Intl.NumberFormat('en-IN', {
+    maximumFractionDigits: 0
+  }).format(price)
+}
+
 interface RazorpayOptions {
   key: string;
   amount: number;
@@ -113,7 +119,12 @@ export default function CheckoutPage() {
   }, [fetchCartItems, status]);
 
   const getTotalPrice = () => {
-    return cartItems.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+    return cartItems.reduce((total, item) => {
+      const price = item.product.isOnSale && item.product.discountedPrice
+        ? item.product.discountedPrice
+        : item.product.regularPrice;
+      return total + (price * item.quantity);
+    }, 0);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -405,12 +416,28 @@ export default function CheckoutPage() {
                 <CardContent>
                   <div className="space-y-4">
                     {cartItems.map((item) => (
-                      <div key={item.id} className="flex justify-between text-sm">
-                        <div>
-                          <p className="font-medium">{item.product.name}</p>
-                          <p className="text-muted-foreground">Qty: {item.quantity}</p>
+                      <div key={item.id} className="space-y-1">
+                        <div className="flex justify-between">
+                          <div className="flex-1">
+                            <p className="font-medium">{item.product.name}</p>
+                            <p className="text-sm text-muted-foreground">Quantity: {item.quantity}</p>
+                          </div>
+                          <div className="text-right">
+                            {item.product.isOnSale && item.product.discountedPrice ? (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">₹{formatPrice(item.product.discountedPrice * item.quantity)}</span>
+                                  <span className="text-sm text-muted-foreground line-through">₹{formatPrice(item.product.regularPrice * item.quantity)}</span>
+                                </div>
+                                <div className="text-sm text-green-600">
+                                  {Math.round(item.product.discountPercentage || 0)}% off
+                                </div>
+                              </>
+                            ) : (
+                              <span className="font-medium">₹{formatPrice(item.product.regularPrice * item.quantity)}</span>
+                            )}
+                          </div>
                         </div>
-                        <span>₹{(item.product.price * item.quantity).toLocaleString()}</span>
                       </div>
                     ))}
                     <div className="border-t pt-4">

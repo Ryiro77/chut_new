@@ -1,288 +1,54 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
-import { PrismaClient, Prisma } from '@prisma/client'
-import { Decimal } from '@prisma/client/runtime/library'
-import { writeFile } from 'fs/promises'
+import { prisma } from '@/lib/db'
+import { Prisma } from '@prisma/client'
+import fs from 'fs/promises'
 import { join } from 'path'
-import { v4 as uuidv4 } from 'uuid'
-import * as fs from 'fs/promises'
+import crypto from 'crypto'
 
-const prisma = new PrismaClient()
-
-type ComponentType = 'CPU' | 'GPU' | 'MOTHERBOARD' | 'RAM' | 'STORAGE' | 'PSU' | 'CASE' | 'COOLER' | 'OTHER'
-
-type SpecInput = {
-  id?: string
-  name: string
-  value: string
-  unit?: string | null
-  groupName?: string | null
-  isHighlight?: boolean
-  sortOrder?: number
+interface SpecInput {
+  name: string;
+  value: string;
+  unit?: string | null;
+  groupName?: string | null;
+  sortOrder?: number;
+  isHighlight?: boolean;
 }
 
-async function handleImageUpload(file: File): Promise<{ filePath: string; size: number; mimeType: string }> {
-  try {
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    
-    // Create unique filename
-    const uniqueFilename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`
-    const relativePath = `/uploads/products/${uniqueFilename}`
-    const absolutePath = join(process.cwd(), 'public', relativePath)
-    
-    // Ensure directory exists
-    await createUploadDirIfNotExists()
-    
-    // Write file
-    await writeFile(absolutePath, buffer)
-    
-    return {
-      filePath: relativePath,
-      size: file.size,
-      mimeType: file.type
-    }
-  } catch (error) {
-    console.error('Error uploading image:', error)
-    throw new Error('Failed to upload image')
-  }
+interface ProductImage {
+  id: string;
+  url: string | null;
+  filePath: string;
+  isMain: boolean;
 }
 
-async function createUploadDirIfNotExists() {
-  const dir = join(process.cwd(), 'public', 'uploads', 'products')
+export async function searchProducts(query: string) {
   try {
-    await fs.mkdir(dir, { recursive: true })
-  } catch (error) {
-    console.error('Error creating upload directory:', error)
-    throw new Error('Failed to create upload directory')
-  }
-}
-
-export async function createProduct(formData: FormData) {
-  const name = formData.get('name') as string
-  const description = formData.get('description') as string
-  const price = new Decimal(formData.get('price') as string)
-  const stock = parseInt(formData.get('stock') as string)
-  const brand = formData.get('brand') as string
-  const sku = formData.get('sku') as string
-  const componentType = formData.get('componentType') as ComponentType
-  const specs = JSON.parse(formData.get('specs') as string || '[]') as SpecInput[]
-  const tags = JSON.parse(formData.get('tags') as string || '[]') as string[]
-
-  try {
-    const category = await prisma.category.upsert({
+    const products = await prisma.product.findMany({
       where: {
-        name: componentType,
-      },
-      update: {},
-      create: {
-        name: componentType,
-        slug: componentType.toLowerCase(),
-      },
-    })
-
-    await prisma.product.create({
-      data: {
-        name,
-        description,
-        price,
-        stock,
-        brand,
-        sku,
-        categoryId: category.id,
-        specs: {
-          create: specs.map(spec => ({
-            name: spec.name,
-            value: spec.value,
-            unit: spec.unit,
-            groupName: spec.groupName,
-            isHighlight: spec.isHighlight || false,
-            sortOrder: spec.sortOrder || 0
-          }))
-        },
-        tags: {
-          create: tags.map(name => ({
-            name: name.toLowerCase()
-          }))
-        }
+        OR: [
+          { name: { contains: query } },
+          { sku: { contains: query } },
+          { brand: { contains: query } }
+        ]
       },
       include: {
-        specs: true,
-        category: true,
-        tags: true
-      }
-    })
-    
-    revalidatePath('/admin/products')
-  } catch (error) {
-    console.error('Error creating product:', error)
-    throw new Error('Failed to create product')
-  }
-}
-
-export async function updateProduct(id: string, formData: FormData) {
-  const name = formData.get('name') as string
-  const description = formData.get('description') as string
-  const price = new Decimal(formData.get('price') as string)
-  const stock = parseInt(formData.get('stock') as string)
-  const brand = formData.get('brand') as string
-  const sku = formData.get('sku') as string
-  const componentType = formData.get('componentType') as ComponentType
-  const specs = JSON.parse(formData.get('specs') as string || '[]') as SpecInput[]
-  const existingImages = JSON.parse(formData.get('existingImages') as string || '[]') as ProductImage[]
-  const tags = JSON.parse(formData.get('tags') as string || '[]') as string[]
-  const existingImageIds = existingImages.map((img) => img.id)
-
-  try {
-    const category = await prisma.category.upsert({
-      where: {
-        name: componentType,
+        category: true
       },
-      update: {},
-      create: {
-        name: componentType,
-        slug: componentType.toLowerCase(),
+      orderBy: {
+        updatedAt: 'desc'
       },
+      take: 10
     })
 
-    // Handle existing specs deletion
-    const existingSpecIds = specs.filter(spec => spec.id).map(spec => spec.id as string)
-    await prisma.productSpecification.deleteMany({
-      where: { 
-        productId: id,
-        NOT: {
-          id: {
-            in: existingSpecIds
-          }
-        }
-      }
-    })
-
-    // Handle images deletion
-    await prisma.productImage.deleteMany({
-      where: {
-        productId: id,
-        NOT: {
-          id: {
-            in: existingImageIds
-          }
-        }
-      }
-    })
-
-    // Update existing images (main status)
-    for (const image of existingImages) {
-      await prisma.productImage.update({
-        where: { id: image.id },
-        data: { isMain: image.isMain }
-      })
-    }
-
-    // Handle new image uploads
-    const newImages = []
-    for (const [key, value] of formData.entries()) {
-      if (key.startsWith('image') && value instanceof File) {
-        const imageData = await handleImageUpload(value)
-        newImages.push(imageData)
-      }
-    }
-
-    // Find or create tags first
-    const tagConnections = await Promise.all(
-      tags.map(async (tagName) => {
-        const normalizedName = tagName.toLowerCase()
-        const existingTag = await prisma.productTag.findUnique({
-          where: { name: normalizedName }
-        })
-        
-        if (existingTag) {
-          return { id: existingTag.id }
-        }
-        
-        const newTag = await prisma.productTag.create({
-          data: { name: normalizedName }
-        })
-        return { id: newTag.id }
-      })
-    )
-
-    // Update product with all changes
-    await prisma.product.update({
-      where: { id },
-      data: {
-        name,
-        description,
-        price,
-        stock,
-        brand,
-        sku,
-        categoryId: category.id,
-        specs: {
-          upsert: specs.map(spec => ({
-            where: {
-              id: spec.id || '',
-            },
-            create: {
-              name: spec.name,
-              value: spec.value,
-              unit: spec.unit,
-              groupName: spec.groupName,
-              isHighlight: spec.isHighlight || false,
-              sortOrder: spec.sortOrder || 0
-            },
-            update: {
-              name: spec.name,
-              value: spec.value,
-              unit: spec.unit,
-              groupName: spec.groupName,
-              isHighlight: spec.isHighlight || false,
-              sortOrder: spec.sortOrder || 0
-            }
-          }))
-        },
-        images: {
-          create: newImages.map(img => ({
-            ...img,
-            isMain: false
-          }))
-        },
-        tags: {
-          set: tagConnections
-        }
-      }
-    })
-    
-    revalidatePath('/admin/products')
+    return products.map(product => ({
+      ...product,
+      regularPrice: product.regularPrice.toNumber(),
+      discountedPrice: product.discountedPrice?.toNumber() ?? null
+    }))
   } catch (error) {
-    console.error('Error updating product:', error)
-    throw new Error('Failed to update product')
-  }
-}
-
-// Define type for raw product from Prisma
-type RawProduct = Prisma.ProductGetPayload<{
-  include: { category: true; specs: true; images: true; tags: true }
-}>
-
-type ProductImage = {
-  id: string
-  filePath: string
-  url: string | null
-  productId: string
-  isMain: boolean
-  createdAt: Date
-  size: number | null
-  mimeType: string | null
-}
-
-// Transform Prisma data to be serializable
-function serializeProduct(product: RawProduct) {
-  return {
-    ...product,
-    price: product.price.toNumber(),
-    createdAt: product.createdAt.toISOString(),
-    updatedAt: product.updatedAt.toISOString()
+    console.error('Failed to search products:', error)
+    throw new Error('Failed to search products')
   }
 }
 
@@ -290,7 +56,7 @@ export async function getProduct(id: string) {
   try {
     const product = await prisma.product.findUnique({
       where: { id },
-      include: { 
+      include: {
         category: true,
         specs: {
           orderBy: {
@@ -301,44 +67,191 @@ export async function getProduct(id: string) {
         tags: true
       }
     })
-    
+
     if (!product) return null
-    return serializeProduct(product)
+
+    return {
+      ...product,
+      regularPrice: product.regularPrice.toNumber(),
+      discountedPrice: product.discountedPrice?.toNumber()
+    }
   } catch (error) {
-    console.error('Error fetching product:', error)
+    console.error('Failed to fetch product:', error)
     throw new Error('Failed to fetch product')
   }
 }
-
-export async function searchProducts(query: string) {
-  const searchQuery = query.toLowerCase()
+export async function createProduct(formData: FormData) {
   try {
-    const products = await prisma.product.findMany({
-      where: {
-        OR: [
-          { name: { contains: searchQuery } },
-          { sku: { contains: searchQuery } },
-          { brand: { contains: searchQuery } },
-          { tags: { some: { name: { contains: searchQuery } } } }
-        ],
+    const categoryName = formData.get('componentType') as string;
+    const regularPrice = formData.get('regularPrice');
+    const discountedPrice = formData.get('discountedPrice');
+    
+    // Validate required fields
+    if (!categoryName || !regularPrice) {
+      throw new Error('Missing required fields');
+    }
+
+    const product = await prisma.product.create({
+      data: {
+        name: formData.get('name') as string,
+        sku: formData.get('sku') as string,
+        description: formData.get('description') as string,
+        regularPrice: new Prisma.Decimal(regularPrice as string),
+        discountedPrice: discountedPrice ? new Prisma.Decimal(discountedPrice as string) : null,
+        isOnSale: formData.get('isOnSale') === 'on',
+        stock: parseInt(formData.get('stock') as string),
+        brand: formData.get('brand') as string,
+        category: {
+          connectOrCreate: {
+            where: { name: categoryName },
+            create: { 
+              name: categoryName, 
+              slug: categoryName.toLowerCase().replace(/\s+/g, '-') 
+            },
+          }
+        }
       },
       include: {
-        category: true,
-        specs: {
-          orderBy: {
-            sortOrder: 'asc'
-          }
-        },
-        images: true,
-        tags: true
-      },
-      take: 10
-    })
-    
-    return products.map(serializeProduct)
+        category: true
+      }
+    });
+
+    return {
+      ...product,
+      regularPrice: product.regularPrice.toNumber(),
+      discountedPrice: product.discountedPrice?.toNumber() ?? null
+    };
   } catch (error) {
-    console.error('Error searching products:', error)
-    throw new Error('Failed to search products')
+    console.error('Detailed create product error:', error);
+    throw new Error(`Failed to create product: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+export async function updateProduct(id: string, formData: FormData) {
+  try {
+    const specs = JSON.parse(formData.get('specs') as string)
+    const existingImages = JSON.parse(formData.get('existingImages') as string)
+    const tags = JSON.parse(formData.get('tags') as string)
+
+    // Get current product to compare images
+    const currentProduct = await prisma.product.findUnique({
+      where: { id },
+      include: { images: true }
+    })
+
+    if (!currentProduct) {
+      throw new Error('Product not found')
+    }
+
+    // Find removed images
+    const removedImages = currentProduct.images.filter(
+      currentImg => !existingImages.some((img: ProductImage) => img.id === currentImg.id)
+    )
+
+    // Delete removed image files
+    for (const img of removedImages) {
+      const filePath = join(process.cwd(), 'public', 'uploads', img.filePath)
+      try {
+        await fs.unlink(filePath)
+      } catch (error) {
+        console.error(`Failed to delete image file ${filePath}:`, error)
+        // Continue even if file deletion fails
+      }
+    }
+
+    // Handle new image uploads
+    const imageFiles: File[] = []
+    let index = 0
+    while (formData.get(`image${index}`)) {
+      const file = formData.get(`image${index}`) as File
+      if (file) {
+        imageFiles.push(file)
+      }
+      index++
+    }
+
+    // Process each new image
+    const newImages = await Promise.all(imageFiles.map(async (file) => {
+      // Generate unique filename using uuid and original extension
+      const ext = file.name.split('.').pop()
+      const filename = `${crypto.randomUUID()}.${ext}`
+      const uploadDir = join(process.cwd(), 'public', 'uploads', 'products')
+      
+      // Ensure upload directory exists
+      await fs.mkdir(uploadDir, { recursive: true })
+      
+      // Convert File to Buffer and save
+      const bytes = await file.arrayBuffer()
+      const buffer = Buffer.from(bytes)
+      
+      // Save file to disk
+      const filePath = join(uploadDir, filename)
+      await fs.writeFile(filePath, buffer)
+      
+      // Return image data for database
+      return {
+        filePath: `products/${filename}`,
+        url: null,
+        isMain: false
+      }
+    }))
+
+    await prisma.product.update({
+      where: { id },
+      data: {
+        name: formData.get('name') as string,
+        sku: formData.get('sku') as string,
+        description: formData.get('description') as string,
+        regularPrice: new Prisma.Decimal(formData.get('regularPrice') as string),
+        discountedPrice: formData.get('discountedPrice') ? new Prisma.Decimal(formData.get('discountedPrice') as string) : null,
+        isOnSale: formData.get('isOnSale') === 'on',
+        stock: parseInt(formData.get('stock') as string),
+        brand: formData.get('brand') as string,
+        specs: {
+          deleteMany: {},
+          create: specs.map((spec: SpecInput) => ({
+            name: spec.name,
+            value: spec.value,
+            unit: spec.unit,
+            groupName: spec.groupName,
+            sortOrder: spec.sortOrder,
+            isHighlight: spec.isHighlight
+          }))
+        },
+        images: {
+          // Delete removed images from database
+          deleteMany: {
+            id: {
+              in: removedImages.map(img => img.id)
+            }
+          },
+          // Update existing images
+          updateMany: existingImages.map((img: ProductImage) => ({
+            where: { id: img.id },
+            data: { isMain: img.isMain }
+          })),
+          // Create new images
+          create: newImages
+        },
+        tags: {
+          set: tags.map((tag: string) => ({ name: tag }))
+        }
+      }
+    })
+  } catch (error) {
+    console.error('Failed to update product:', error)
+    throw new Error('Failed to update product')
+  }
+}
+
+export async function deleteProduct(id: string) {
+  try {
+    await prisma.product.delete({
+      where: { id }
+    })
+  } catch (error) {
+    console.error('Failed to delete product:', error)
+    throw new Error('Failed to delete product')
   }
 }
 
@@ -347,7 +260,7 @@ export async function getTags(search?: string) {
     return await prisma.productTag.findMany({
       where: search ? {
         name: {
-          contains: search.toLowerCase(),
+          contains: search
         }
       } : undefined,
       orderBy: {
@@ -355,7 +268,7 @@ export async function getTags(search?: string) {
       }
     })
   } catch (error) {
-    console.error('Error fetching tags:', error)
+    console.error('Failed to fetch tags:', error)
     throw new Error('Failed to fetch tags')
   }
 }
@@ -363,17 +276,10 @@ export async function getTags(search?: string) {
 export async function createTag(name: string) {
   try {
     return await prisma.productTag.create({
-      data: {
-        name: name.toLowerCase(),
-      }
+      data: { name }
     })
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        throw new Error('Tag already exists')
-      }
-    }
-    console.error('Error creating tag:', error)
+    console.error('Failed to create tag:', error)
     throw new Error('Failed to create tag')
   }
 }
@@ -384,20 +290,7 @@ export async function deleteTag(id: string) {
       where: { id }
     })
   } catch (error) {
-    console.error('Error deleting tag:', error)
+    console.error('Failed to delete tag:', error)
     throw new Error('Failed to delete tag')
-  }
-}
-
-export async function deleteProduct(id: string) {
-  try {
-    await prisma.product.delete({
-      where: { id }
-    })
-    revalidatePath('/admin/products')
-    return { success: true }
-  } catch (error) {
-    console.error('Error deleting product:', error)
-    throw new Error('Failed to delete product')
   }
 }

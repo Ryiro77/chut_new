@@ -9,33 +9,41 @@ export async function getProducts({ category, search, minPrice, maxPrice, filter
   filters?: Record<string, string[]>;
 }) {
   const params = new URLSearchParams();
+  
   if (category) params.append('category', category);
   if (search) params.append('search', search);
   if (minPrice !== undefined) params.append('minPrice', minPrice.toString());
   if (maxPrice !== undefined) params.append('maxPrice', maxPrice.toString());
-  if (filters && Object.keys(filters).length > 0) {
-    params.append('filters', JSON.stringify(filters));
+  if (filters) params.append('filters', JSON.stringify(filters));
+  
+  try {
+    const response = await fetch(`/api/products?${params.toString()}`);
+    if (!response.ok) throw new Error('Failed to fetch products');
+    return response.json();
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    throw error;
   }
-
-  const response = await fetch(`/api/products?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch products');
-  }
-  return response.json();
 }
 
 export async function getCartItems(): Promise<CartItem[]> {
   try {
     const response = await fetch('/api/cart');
-    const data = await response.json();
     
-    // If the response is an empty array, return local cart items
-    if (Array.isArray(data) && data.length === 0) {
+    if (response.status === 401) {
+      // If unauthorized, return local cart items
       return getLocalCart().map(item => ({
-        id: item.productId, // Use productId as temporary id
+        id: item.productId,
         product: item.product,
         quantity: item.quantity
       }));
+    }
+    
+    const data = await response.json();
+    
+    // If the response is an error or not an array, return empty array
+    if (!Array.isArray(data)) {
+      return [];
     }
     
     return data;
@@ -52,12 +60,8 @@ export async function getCartItems(): Promise<CartItem[]> {
 
 export async function removeFromCart(itemId: string) {
   try {
-    const response = await fetch('/api/cart', {
+    const response = await fetch(`/api/cart?id=${itemId}`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ itemId }),
     });
 
     if (response.status === 401) {
@@ -66,7 +70,17 @@ export async function removeFromCart(itemId: string) {
       return;
     }
 
-    if (!response.ok) {
+    // Check if the response is successful (status in 200-299 range)
+    if (response.ok) {
+      return;
+    }
+
+    // Only try to parse error response if there's content
+    const text = await response.text();
+    if (text) {
+      const error = JSON.parse(text);
+      throw new Error(error.error || 'Failed to remove item');
+    } else {
       throw new Error('Failed to remove item');
     }
   } catch (err) {
@@ -76,7 +90,7 @@ export async function removeFromCart(itemId: string) {
   }
 }
 
-export async function addToCart(items: Pick<Product, 'id' | 'name' | 'price' | 'brand'>[], isCustomBuild?: boolean, customBuildName?: string) {
+export async function addToCart(items: Pick<Product, 'id' | 'name' | 'brand' | 'regularPrice' | 'discountedPrice' | 'isOnSale'>[], isCustomBuild?: boolean, customBuildName?: string) {
   try {
     const response = await fetch('/api/cart', {
       method: 'POST',
@@ -84,7 +98,10 @@ export async function addToCart(items: Pick<Product, 'id' | 'name' | 'price' | '
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        items,
+        items: items.map(item => ({
+          ...item,
+          price: item.isOnSale && item.discountedPrice ? item.discountedPrice : item.regularPrice
+        })),
         isCustomBuild,
         customBuildName,
       }),
@@ -115,13 +132,21 @@ export async function checkout(items: CartItem[], shippingDetails: CheckoutFormD
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      items,
-      shippingDetails
+      items: items.map(item => ({
+        id: item.product.id,
+        quantity: item.quantity,
+        price: item.product.isOnSale && item.product.discountedPrice 
+          ? item.product.discountedPrice 
+          : item.product.regularPrice
+      })),
+      shippingDetails,
     }),
   });
 
   if (!response.ok) {
-    throw new Error('Failed to place order');
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to place order');
   }
+
   return response.json();
 }

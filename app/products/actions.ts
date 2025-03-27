@@ -24,12 +24,31 @@ export async function getProducts({ category, minPrice, maxPrice, search, filter
               name: category
             }
           } : {},
-          // Price range filter
+          // Price range filter (using discountedPrice if available, otherwise regularPrice)
           {
-            price: {
-              gte: minPrice ? new Decimal(minPrice) : undefined,
-              lte: maxPrice ? new Decimal(maxPrice) : undefined,
-            }
+            OR: [
+              {
+                AND: [
+                  { isOnSale: true },
+                  {
+                    discountedPrice: {
+                      gte: minPrice ? new Decimal(minPrice) : undefined,
+                      lte: maxPrice ? new Decimal(maxPrice) : undefined,
+                    }
+                  }
+                ]
+              },
+              {
+                OR: [
+                  { isOnSale: false },
+                  { discountedPrice: null }
+                ],
+                regularPrice: {
+                  gte: minPrice ? new Decimal(minPrice) : undefined,
+                  lte: maxPrice ? new Decimal(maxPrice) : undefined,
+                }
+              }
+            ]
           },
           // Search filter
           search ? {
@@ -71,7 +90,8 @@ export async function getProducts({ category, minPrice, maxPrice, search, filter
 
     return products.map(product => ({
       ...product,
-      price: product.price.toNumber(),
+      regularPrice: product.regularPrice.toNumber(),
+      discountedPrice: product.discountedPrice?.toNumber(),
       createdAt: product.createdAt.toISOString(),
       updatedAt: product.updatedAt.toISOString()
     }))

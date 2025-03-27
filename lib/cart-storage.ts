@@ -20,6 +20,7 @@ export function addToLocalCart(product: Product, quantity: number = 1) {
 
   if (existingItem) {
     existingItem.quantity += quantity;
+    existingItem.product = product;
   } else {
     cart.push({
       productId: product.id,

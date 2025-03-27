@@ -15,20 +15,13 @@ type Product = {
   sku: string
   description: string
   brand: string
-  price: number
+  regularPrice: number
+  discountedPrice: number | null
   stock: number
-  categoryId: string
-  createdAt: string
-  updatedAt: string
+  price?: number
   category: {
     id: string
     name: string
-    description?: string | null
-    slug: string
-    parentId?: string | null
-    icon?: string | null
-    featured: boolean
-    sortOrder: number
   }
 }
 
@@ -49,7 +42,15 @@ export default function AdminProducts() {
       setIsSearching(true)
       try {
         const results = await searchProducts(query)
-        setSearchResults(results)
+        // Transform results to match Product type
+        setSearchResults(results.map(product => ({
+          ...product,
+          regularPrice: product.regularPrice,
+          discountedPrice: product.discountedPrice ?? null,
+          price: product.isOnSale && product.discountedPrice ? 
+            product.discountedPrice: 
+            product.regularPrice
+        })))
       } catch (error) {
         console.error('Search failed:', error)
       } finally {

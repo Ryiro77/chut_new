@@ -14,27 +14,17 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { addToCart } from '@/lib/api-client'
 
-interface Spec {
-  id: string;
-  name: string;
-  value: string;
-  unit?: string | null;
-}
-
-interface ProductImage {
-  id: string;
-  url: string | null;
-  isMain: boolean;
-  filePath: string;
-}
-
 interface Product {
   id: string;
   name: string;
-  description: string;
-  price: number;
-  stock: number;
+  regularPrice: number;
+  discountedPrice?: number;
+  discountPercentage?: number;
+  isOnSale: boolean;
   brand: string;
+  description: string;
+  price?: number;
+  stock: number;
   sku: string;
   categoryId: string;
   category: {
@@ -42,8 +32,18 @@ interface Product {
     name: string;
     slug: string;
   };
-  specs: Spec[];
-  images: ProductImage[];
+  specs: Array<{
+    id: string;
+    name: string;
+    value: string;
+    unit?: string | null;
+  }>;
+  images: Array<{
+    id: string;
+    url: string | null;
+    filePath: string;
+    isMain: boolean;
+  }>;
   tags: Array<{
     id: string;
     name: string;
@@ -146,8 +146,10 @@ export default function ProductsContent() {
       await addToCart([{
         id: product.id,
         name: product.name,
-        price: product.price,
-        brand: product.brand
+        brand: product.brand,
+        regularPrice: product.regularPrice,
+        discountedPrice: product.discountedPrice,
+        isOnSale: product.isOnSale
       }])
       toast.success("Added to cart")
     } catch (error) {
@@ -332,11 +334,18 @@ export default function ProductsContent() {
                       <div className="aspect-square relative bg-muted">
                         {product.images?.length > 0 && (
                           <Image
-                            src={product.images.find(img => img.isMain)?.url || product.images[0]?.url || product.images[0]?.filePath || '/no-image.png'}
+                            src={
+                              product.images.find(img => img.isMain)?.url || 
+                              product.images[0]?.url ||
+                              `/uploads/products/${product.images.find(img => img.isMain)?.filePath?.split('/').pop() || 
+                              product.images[0]?.filePath?.split('/').pop()}` ||
+                              '/no-image.png'
+                            }
                             alt={product.name}
                             fill
-                            className="object-contain"
                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            className="object-contain"
+                            priority={product.images.find(img => img.isMain)?.isMain}
                           />
                         )}
                       </div>
@@ -357,8 +366,22 @@ export default function ProductsContent() {
                         </div>
                       </CardContent>
                       <CardFooter className="flex justify-between items-center">
-                        <span className="font-semibold">₹{formatPrice(product.price)}</span>
-                        <div className="space-x-2">
+                        <div className="space-y-1">
+                          {product.isOnSale && product.discountedPrice ? (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg font-semibold">₹{formatPrice(product.discountedPrice)}</span>
+                                <span className="text-sm text-muted-foreground line-through">₹{formatPrice(product.regularPrice)}</span>
+                              </div>
+                              <div className="text-sm text-green-600 font-medium">
+                                {Math.round(product.discountPercentage || 0)}% off
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-lg font-semibold">₹{formatPrice(product.regularPrice)}</span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
                           {product.category.name !== 'OTHER' && (
                             <Button 
                               variant="outline"

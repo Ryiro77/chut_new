@@ -1,5 +1,6 @@
-/** @type {import('next').NextConfig} */
-const config = {
+import type { NextConfig } from 'next'
+
+const config: NextConfig = {
   images: {
     remotePatterns: [
       {
@@ -7,8 +8,9 @@ const config = {
         hostname: 'localhost',
         port: '3000',
         pathname: '/uploads/**',
-      },
+      }
     ],
+    unoptimized: true
   },
   // Allow serving files from /uploads directory
   async rewrites() {
@@ -21,4 +23,4 @@ const config = {
   },
 }
 
-export default config;
+export default config

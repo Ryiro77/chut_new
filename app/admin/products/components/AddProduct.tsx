@@ -5,51 +5,87 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { toast } from 'sonner'
 
 const componentTypes = ['CPU', 'GPU', 'MOTHERBOARD', 'RAM', 'STORAGE', 'PSU', 'CASE', 'COOLER', 'OTHER'] as const
 
 export default function AddProduct() {
+  const router = useRouter()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  async function handleSubmit(formData: FormData) {
+    setIsSubmitting(true)
+    try {
+      await createProduct(formData)
+      toast.success('Product created successfully')
+      router.push('/admin/products')
+    } catch (error) {
+      toast.error('Failed to create product', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <Card>
       <CardContent className="pt-6">
-        <h2 className="text-xl font-bold mb-6">Add New Product</h2>
-        <form action={createProduct} className="space-y-6">
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="name">Product Name</Label>
-              <Input id="name" name="name" required />
-            </div>
+        <form action={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Name</Label>
+            <Input id="name" name="name" required />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="sku">SKU</Label>
-              <Input id="sku" name="sku" required />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="sku">SKU</Label>
+            <Input id="sku" name="sku" required />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
-            <Textarea 
-              id="description" 
-              name="description" 
-              required 
-              rows={3}
-            />
+            <Textarea id="description" name="description" required />
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="price">Price</Label>
+              <Label htmlFor="regularPrice">Regular Price</Label>
               <Input 
                 type="number" 
-                id="price" 
-                name="price" 
+                id="regularPrice" 
+                name="regularPrice" 
                 step="0.01" 
                 required 
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="discountedPrice">Discounted Price</Label>
+              <Input 
+                type="number" 
+                id="discountedPrice" 
+                name="discountedPrice" 
+                step="0.01" 
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isOnSale"
+                name="isOnSale"
+              />
+              <Label htmlFor="isOnSale">Item is on sale</Label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="stock">Stock</Label>
               <Input 
@@ -59,11 +95,11 @@ export default function AddProduct() {
                 required 
               />
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="brand">Brand</Label>
-            <Input id="brand" name="brand" required />
+            <div className="space-y-2">
+              <Label htmlFor="brand">Brand</Label>
+              <Input id="brand" name="brand" required />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -78,12 +114,13 @@ export default function AddProduct() {
                     {type.charAt(0) + type.slice(1).toLowerCase().replace('_', ' ')}
                   </SelectItem>
                 ))}
+
               </SelectContent>
             </Select>
           </div>
 
-          <Button type="submit" className="w-full">
-            Add Product
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? 'Submitting...' : 'Add Product'}
           </Button>
         </form>
       </CardContent>

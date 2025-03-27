@@ -1,27 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { razorpay } from '@/lib/razorpay';
-import crypto from 'crypto';
-import { CartItem, CheckoutFormData } from '@/lib/types';
-
-const prisma = new PrismaClient();
-
-// Verify Razorpay webhook signature
-function verifyWebhookSignature(
-  razorpay_signature: string,
-  razorpay_payment_id: string,
-  razorpay_order_id: string
-) {
-  const text = `${razorpay_order_id}|${razorpay_payment_id}`;
-  const generated_signature = crypto
-    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
-    .update(text)
-    .digest('hex');
-  
-  return razorpay_signature === generated_signature;
-}
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/db'
+import { razorpay, verifyWebhookSignature } from '@/lib/razorpay'
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,25 +12,53 @@ export async function POST(request: NextRequest) {
     }
 
     const { items, shippingDetails }: { 
-      items: CartItem[];
-      shippingDetails: CheckoutFormData;
+      items: Array<{
+        product: {
+          id: string;
+          regularPrice: number;
+          discountedPrice?: number | null;
+          isOnSale: boolean;
+        };
+        quantity: number;
+      }>;
+      shippingDetails: {
+        name: string;
+        email: string;
+        phone: string;
+        address: string;
+        city: string;
+        state: string;
+        pincode: string;
+        paymentMethod: 'cod' | 'online';
+      };
     } = await request.json();
 
-    // Calculate total amount
+    // Calculate total amount considering discounts
     const totalAmount = items.reduce(
-      (sum: number, item: CartItem) => sum + (item.product.price * item.quantity),
+      (sum, item) => {
+        const price = item.product.isOnSale && item.product.discountedPrice
+          ? item.product.discountedPrice
+          : item.product.regularPrice;
+        return sum + (price * item.quantity);
+      },
       0
     );
 
-    // Create order in database first
+    // Create order in database
     const order = await prisma.order.create({
       data: {
         userId: session.user.id,
         status: 'PENDING',
         totalAmount,
-        discountAmount: 0,
+        discountAmount: items.reduce((sum, item) => {
+          if (item.product.isOnSale && item.product.discountedPrice) {
+            const discount = item.product.regularPrice - item.product.discountedPrice;
+            return sum + (discount * item.quantity);
+          }
+          return sum;
+        }, 0),
         finalAmount: totalAmount,
-        address: shippingDetails.address, // Store simplified address
+        address: shippingDetails.address,
         shippingAddress: {
           create: {
             fullName: shippingDetails.name,
@@ -62,10 +71,12 @@ export async function POST(request: NextRequest) {
           }
         },
         items: {
-          create: items.map((item: CartItem) => ({
+          create: items.map((item) => ({
             productId: item.product.id,
             quantity: item.quantity,
-            price: item.product.price
+            price: item.product.isOnSale && item.product.discountedPrice
+              ? item.product.discountedPrice
+              : item.product.regularPrice
           }))
         }
       },
@@ -82,7 +93,7 @@ export async function POST(request: NextRequest) {
     if (shippingDetails.paymentMethod === 'online') {
       // Create Razorpay order
       const razorpayOrder = await razorpay.orders.create({
-        amount: totalAmount * 100, // Convert to paise
+        amount: Math.round(totalAmount * 100), // Convert to paise, ensure it's rounded
         currency: 'INR',
         receipt: order.id,
         notes: {

@@ -21,12 +21,31 @@ export async function GET(request: NextRequest) {
               name: category
             }
           } : {},
-          // Price range filter
+          // Price range filter (using discountedPrice if available, otherwise regularPrice)
           {
-            price: {
-              gte: minPrice ? new Decimal(minPrice) : undefined,
-              lte: maxPrice ? new Decimal(maxPrice) : undefined,
-            }
+            OR: [
+              {
+                AND: [
+                  { isOnSale: true },
+                  {
+                    discountedPrice: {
+                      gte: minPrice ? new Decimal(minPrice) : undefined,
+                      lte: maxPrice ? new Decimal(maxPrice) : undefined,
+                    }
+                  }
+                ]
+              },
+              {
+                OR: [
+                  { isOnSale: false },
+                  { discountedPrice: null }
+                ],
+                regularPrice: {
+                  gte: minPrice ? new Decimal(minPrice) : undefined,
+                  lte: maxPrice ? new Decimal(maxPrice) : undefined,
+                }
+              }
+            ]
           },
           // Search filter
           search ? {
@@ -45,20 +64,22 @@ export async function GET(request: NextRequest) {
             sortOrder: 'asc'
           }
         },
-        images: true,
-        tags: true
-      },
-      orderBy: {
-        createdAt: 'desc'
+        images: true
       }
     });
 
-    return NextResponse.json(products.map(product => ({
+    // Transform Decimal values to numbers
+    const transformedProducts = products.map(product => ({
       ...product,
-      price: product.price.toNumber(),
-      createdAt: product.createdAt.toISOString(),
-      updatedAt: product.updatedAt.toISOString()
-    })));
+      regularPrice: product.regularPrice.toNumber(),
+      discountedPrice: product.discountedPrice?.toNumber(),
+      specs: product.specs.map(spec => ({
+        ...spec,
+        sortOrder: spec.sortOrder || 0
+      }))
+    }));
+
+    return NextResponse.json(transformedProducts);
   } catch (error) {
     console.error('Error fetching products:', error);
     return NextResponse.json(

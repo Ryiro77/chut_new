@@ -49,7 +49,12 @@ export default function CartPage() {
   };
 
   const getTotalPrice = () => {
-    return cartItems.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+    return cartItems.reduce((total, item) => {
+      const price = item.product.isOnSale && item.product.discountedPrice
+        ? item.product.discountedPrice
+        : item.product.regularPrice;
+      return total + (price * item.quantity);
+    }, 0);
   };
 
   const handleCheckout = () => {
@@ -110,7 +115,21 @@ export default function CartPage() {
                           )}
                         </div>
                         <div className="text-right">
-                          <p className="font-medium">₹{(item.product.price * item.quantity).toLocaleString()}</p>
+                          {item.product.isOnSale && item.product.discountedPrice ? (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium">₹{(item.product.discountedPrice * item.quantity).toLocaleString()}</p>
+                                <p className="text-sm text-muted-foreground line-through">
+                                  ₹{(item.product.regularPrice * item.quantity).toLocaleString()}
+                                </p>
+                              </div>
+                              <div className="text-sm text-green-600">
+                                {Math.round(item.product.discountPercentage || 0)}% off
+                              </div>
+                            </>
+                          ) : (
+                            <p className="font-medium">₹{(item.product.regularPrice * item.quantity).toLocaleString()}</p>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"

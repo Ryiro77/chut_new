@@ -13,7 +13,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select" // Added import
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
 
 type Spec = {
   id?: string
@@ -25,33 +26,34 @@ type Spec = {
   sortOrder?: number
 }
 
-type ProductImage = {
+interface ProductImage {
   id: string;
+  url: string | null;
   filePath: string;
-  url?: string | null;
   isMain: boolean;
-  size?: number | null;
-  mimeType?: string | null;
-};
+}
 
-type Product = {
-  id: string
-  name: string
-  description: string
-  price: number
-  stock: number
-  brand: string
-  sku: string
-  categoryId: string
-  createdAt: string
-  updatedAt: string
-  specs: Spec[]
-  images: ProductImage[]
+interface ProductTag {
+  id: string;
+  name: string;
+}
+
+interface ProductData {
+  id: string;
+  name: string;
+  sku: string;
+  description: string;
+  regularPrice: number;
+  discountedPrice?: number;
+  isOnSale: boolean;
+  stock: number;
+  brand: string;
   category: {
-    id: string
-    name: string
-  }
-  tags: { id: string; name: string }[]
+    name: string;
+  };
+  specs?: Spec[];
+  images?: ProductImage[];
+  tags?: ProductTag[];
 }
 
 const defaultCpuSpecs: Spec[] = [
@@ -283,7 +285,7 @@ const Cooler_Type = [
 ];
 
 export default function EditProduct({ productId }: { productId: string }) {
-  const [product, setProduct] = useState<Product | null>(null)
+  const [product, setProduct] = useState<ProductData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [specs, setSpecs] = useState<Spec[]>([])
@@ -299,7 +301,7 @@ export default function EditProduct({ productId }: { productId: string }) {
       try {
         const data = await getProduct(productId)
         if (data) {
-          setProduct(data as Product)
+          setProduct(data as ProductData)
           
           // If the product has no specs, add default specs based on category
           if (!data.specs || data.specs.length === 0) {
@@ -336,9 +338,9 @@ export default function EditProduct({ productId }: { productId: string }) {
           }
           
           setImages(data.images || [])
-          const mainImage = data.images?.find(img => img.isMain)
+          const mainImage = data.images?.find((img: ProductImage) => img.isMain)
           setMainImageId(mainImage?.id || null)
-          setTags(data.tags?.map(tag => tag.name) || [])
+          setTags(data.tags?.map((tag: ProductTag) => tag.name) || [])
         } else {
           setError('Product not found')
         }
@@ -504,16 +506,27 @@ export default function EditProduct({ productId }: { productId: string }) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="price">Price</Label>
+                <Label htmlFor="regularPrice">Regular Price</Label>
                 <Input 
                   type="number" 
-                  id="price" 
-                  name="price" 
+                  id="regularPrice" 
+                  name="regularPrice" 
                   step="0.01" 
                   required 
-                  defaultValue={product?.price}
+                  defaultValue={product?.regularPrice}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="discountedPrice">Discounted Price</Label>
+                <Input 
+                  type="number" 
+                  id="discountedPrice" 
+                  name="discountedPrice" 
+                  step="0.01" 
+                  defaultValue={product?.discountedPrice}
                 />
               </div>
 
@@ -526,6 +539,17 @@ export default function EditProduct({ productId }: { productId: string }) {
                   required 
                   defaultValue={product?.stock}
                 />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="isOnSale"
+                  name="isOnSale"
+                  defaultChecked={product?.isOnSale}
+                />
+                <Label htmlFor="isOnSale">Item is on sale</Label>
               </div>
             </div>
 
@@ -563,7 +587,7 @@ export default function EditProduct({ productId }: { productId: string }) {
                     <div key={image.id} className="relative group">
                       <div className="aspect-square relative border rounded-md overflow-hidden">
                         <Image
-                          src={image.url || image.filePath}
+                          src={image.url ? image.url : `/uploads/products/${image.filePath.split('/').pop()}`}
                           alt="Product"
                           fill
                           className="object-cover"
