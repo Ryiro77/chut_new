@@ -7,20 +7,33 @@ import { Footer } from "@/components/Footer"
 import { Container } from "@/components/ui/container"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, Trash2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Loader2, Trash2, MinusCircle, PlusCircle } from "lucide-react"
 import { toast } from "sonner"
 import { CartItem } from '@/lib/types'
 import { getCartItems, removeFromCart } from '@/lib/api-client'
+import { updateLocalCartQuantity } from '@/lib/cart-storage'
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
   const router = useRouter();
 
   useEffect(() => {
     fetchCartItems();
   }, []);
+
+  // Initialize quantities when cart items load
+  useEffect(() => {
+    const initialQuantities: Record<string, number> = {};
+    cartItems.forEach(item => {
+      initialQuantities[item.id] = item.quantity;
+    });
+    setQuantities(initialQuantities);
+  }, [cartItems]);
 
   const fetchCartItems = async () => {
     try {
@@ -45,6 +58,77 @@ export default function CartPage() {
       toast.error("Failed to remove item");
     } finally {
       setRemoving(null);
+    }
+  };
+
+  const handleUpdateQuantity = async (itemId: string, newQuantity: number) => {
+    // Prevent invalid quantities
+    if (newQuantity < 1 || newQuantity > 8) return;
+
+    // Find the item to update
+    const itemToUpdate = cartItems.find(item => item.id === itemId);
+    if (!itemToUpdate) return;
+
+    // Update local quantity state immediately for responsiveness
+    setQuantities(prev => ({
+      ...prev,
+      [itemId]: newQuantity
+    }));
+
+    setUpdating(itemId);
+    try {
+      const response = await fetch('/api/cart', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cartItemId: itemId,
+          quantity: newQuantity,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok && response.status !== 401) {
+        // Revert quantity on error
+        setQuantities(prev => ({
+          ...prev,
+          [itemId]: itemToUpdate.quantity
+        }));
+        throw new Error(data.error || 'Failed to update quantity');
+      }
+
+      // Update local storage if unauthorized or using local cart
+      if (response.status === 401) {
+        updateLocalCartQuantity(itemToUpdate.product.id, newQuantity);
+        
+        // Update UI state
+        setCartItems(prev => prev.map(cartItem => 
+          cartItem.id === itemId ? {
+            ...cartItem,
+            quantity: newQuantity
+          } : cartItem
+        ));
+      } else {
+        // Regular server-side update - update UI with server response
+        setCartItems(prev => prev.map(item => 
+          item.id === data.id ? {
+            ...item,
+            ...data,
+            product: {
+              ...item.product,
+              ...data.product
+            }
+          } : item
+        ));
+      }
+      toast.success("Quantity updated");
+    } catch (error) {
+      console.error('Failed to update quantity:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to update quantity");
+    } finally {
+      setUpdating(null);
     }
   };
 
@@ -104,6 +188,46 @@ export default function CartPage() {
                         <div className="space-y-1">
                           <h3 className="font-medium">{item.product.name}</h3>
                           <p className="text-sm text-muted-foreground">{item.product.brand}</p>
+                          <div className="flex items-center gap-3 mt-2">
+                            <label className="text-sm">Quantity:</label>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleUpdateQuantity(item.id, quantities[item.id] - 1)}
+                                disabled={quantities[item.id] <= 1 || updating === item.id}
+                              >
+                                <MinusCircle className="h-4 w-4" />
+                              </Button>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={8}
+                                value={quantities[item.id] || item.quantity}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  if (!isNaN(val) && val >= 1 && val <= 8) {
+                                    handleUpdateQuantity(item.id, val);
+                                  }
+                                }}
+                                className="w-16 text-center h-8"
+                                disabled={updating === item.id}
+                              />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleUpdateQuantity(item.id, quantities[item.id] + 1)}
+                                disabled={quantities[item.id] >= 8 || updating === item.id}
+                              >
+                                <PlusCircle className="h-4 w-4" />
+                              </Button>
+                              {updating === item.id && (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              )}
+                            </div>
+                          </div>
                           {item.product.specs && item.product.specs.length > 0 && (
                             <div className="mt-2 space-y-1">
                               {item.product.specs.map((spec, index) => (
@@ -124,7 +248,7 @@ export default function CartPage() {
                                 </p>
                               </div>
                               <div className="text-sm text-green-600">
-                                {Math.round(item.product.discountPercentage || 0)}% off
+                                {Math.round(((item.product.regularPrice - item.product.discountedPrice) / item.product.regularPrice) * 100)}% off
                               </div>
                             </>
                           ) : (

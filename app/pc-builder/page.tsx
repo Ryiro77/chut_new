@@ -90,7 +90,7 @@ function SelectComponentDialog({ open, onOpenChange, componentType, onSelect }: 
                               <span className="text-sm text-muted-foreground line-through">₹{product.regularPrice.toLocaleString()}</span>
                             </div>
                             <div className="text-sm text-green-600">
-                              {Math.round(product.discountPercentage || 0)}% off
+                              {Math.round(((product.regularPrice - product.discountedPrice) / product.regularPrice) * 100)}% off
                             </div>
                           </div>
                         ) : (
@@ -124,6 +124,7 @@ export default function PCBuilderPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState('');
   const [loading, setLoading] = useState(false);
+  const [buildQuantity, setBuildQuantity] = useState(1);
   const router = useRouter();
 
   const getImageUrl = (image: { url?: string | null, filePath?: string | null } | undefined) => {
@@ -243,6 +244,7 @@ export default function PCBuilderPage() {
       
       await addToCart(
         buildComponents,
+        buildQuantity,
         true,
         `Custom PC Build (${new Date().toLocaleDateString()})`
       );
@@ -348,9 +350,31 @@ export default function PCBuilderPage() {
                         ))}
                         <div className="border-t pt-2 mt-4">
                           <div className="flex justify-between font-semibold">
-                            <span>Total</span>
+                            <span>Total per unit</span>
                             <span>₹{getTotalPrice().toLocaleString()}</span>
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Quantity Selection */}
+                      <div className="border-t pt-4">
+                        <div className="flex items-center justify-between">
+                          <label className="font-medium">Quantity:</label>
+                          <select 
+                            className="w-20 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                            value={buildQuantity}
+                            onChange={(e) => setBuildQuantity(parseInt(e.target.value))}
+                          >
+                            {[...Array(8)].map((_, i) => (
+                              <option key={i + 1} value={i + 1}>
+                                {i + 1}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex justify-between font-semibold mt-2">
+                          <span>Total</span>
+                          <span>₹{(getTotalPrice() * buildQuantity).toLocaleString()}</span>
                         </div>
                       </div>
 

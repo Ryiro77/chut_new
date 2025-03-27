@@ -1,26 +1,18 @@
-import { getServerSession } from 'next-auth'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import { prisma } from '@/lib/db'
-import { authOptions } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { prisma } from '@/lib/db';
+import { authOptions } from '@/lib/auth';
 
-type CartItemInput = {
-  id: string;
-  name: string;
-  brand: string;
-  regularPrice: number;
-  discountedPrice?: number;
-  isOnSale: boolean;
-}
-
+// GET /api/cart - Get all cart items for the current user
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      // Return 401 for unauthenticated users - client will handle local storage
+      return new Response(null, { status: 401 });
+    }
+
     const cartItems = await prisma.cartItem.findMany({
       where: {
         userId: session.user.id
@@ -36,7 +28,6 @@ export async function GET() {
       }
     });
 
-    // Transform Decimal values to numbers
     return NextResponse.json(cartItems.map(item => ({
       ...item,
       product: {
@@ -45,7 +36,6 @@ export async function GET() {
         discountedPrice: item.product.discountedPrice?.toNumber()
       }
     })));
-
   } catch (error) {
     console.error('Failed to fetch cart items:', error);
     return NextResponse.json(
@@ -55,36 +45,70 @@ export async function GET() {
   }
 }
 
+// POST /api/cart - Add items to cart
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const session = await getServerSession(authOptions);
     const body = await request.json();
     const { items, customBuildName } = body;
 
-    // Process each item
-    const cartItems = await Promise.all(items.map(async (item: CartItemInput) => {
-      const cartItem = await prisma.cartItem.create({
-        data: {
+    if (!session) {
+      // For unauthenticated users, just return success
+      // Client will handle storing in localStorage
+      return NextResponse.json({ success: true }, { status: 401 });
+    }
+
+    // Process each item for authenticated users
+    const cartItems = await Promise.all(items.map(async (item: { id: string; quantity?: number }) => {
+      // Check if item already exists in cart
+      const existingItem = await prisma.cartItem.findFirst({
+        where: {
           userId: session.user.id,
           productId: item.id,
-          quantity: 1,
-          customBuildName
-        },
-        include: {
-          product: {
-            include: {
-              category: true,
-              specs: true,
-              images: true
-            }
-          }
         }
       });
+
+      let cartItem;
+      if (existingItem) {
+        // Update existing item's quantity, respecting the limit of 8
+        cartItem = await prisma.cartItem.update({
+          where: {
+            id: existingItem.id,
+          },
+          data: {
+            quantity: Math.min(existingItem.quantity + (item.quantity || 1), 8),
+            customBuildName
+          },
+          include: {
+            product: {
+              include: {
+                category: true,
+                specs: true,
+                images: true
+              }
+            }
+          }
+        });
+      } else {
+        // Create new cart item
+        cartItem = await prisma.cartItem.create({
+          data: {
+            userId: session.user.id,
+            productId: item.id,
+            quantity: Math.min(item.quantity || 1, 8),
+            customBuildName
+          },
+          include: {
+            product: {
+              include: {
+                category: true,
+                specs: true,
+                images: true
+              }
+            }
+          }
+        });
+      }
 
       return {
         ...cartItem,
@@ -98,23 +122,25 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(cartItems);
   } catch (error) {
-    console.error('Failed to add item to cart:', error);
+    console.error('Failed to add items to cart:', error);
     return NextResponse.json(
-      { error: 'Failed to add item to cart' },
+      { error: 'Failed to add items to cart' },
       { status: 500 }
     );
   }
 }
 
+// PUT /api/cart - Update cart item quantity
 export async function PUT(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
-    const { cartItemId, quantity } = await request.json();
+    const session = await getServerSession(authOptions);
+    const body = await request.json();
+    const { cartItemId, quantity } = body;
+
+    if (!session) {
+      // For unauthenticated users, return unauthorized
+      return NextResponse.json({ success: true }, { status: 401 });
+    }
 
     const cartItem = await prisma.cartItem.update({
       where: {
@@ -122,14 +148,19 @@ export async function PUT(request: NextRequest) {
         userId: session.user.id
       },
       data: {
-        quantity
+        quantity: Math.min(Math.max(1, quantity), 8) // Ensure quantity is between 1 and 8
       },
       include: {
-        product: true
+        product: {
+          include: {
+            category: true,
+            specs: true,
+            images: true
+          }
+        }
       }
     });
 
-    // Transform the response
     return NextResponse.json({
       ...cartItem,
       product: {
@@ -147,34 +178,37 @@ export async function PUT(request: NextRequest) {
   }
 }
 
+// DELETE /api/cart?id={cartItemId} - Remove item from cart
 export async function DELETE(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
-    const itemId = request.nextUrl.searchParams.get('id');
-    if (!itemId) {
+    const session = await getServerSession(authOptions);
+    const { searchParams } = new URL(request.url);
+    const cartItemId = searchParams.get('id');
+
+    if (!cartItemId) {
       return NextResponse.json(
-        { error: 'Item ID is required' },
+        { error: 'Cart item ID is required' },
         { status: 400 }
       );
     }
 
+    if (!session) {
+      // For unauthenticated users, return unauthorized
+      return NextResponse.json({ success: true }, { status: 401 });
+    }
+
     await prisma.cartItem.delete({
       where: {
-        id: itemId,
+        id: cartItemId,
         userId: session.user.id
       }
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Failed to remove item from cart:', error);
+    console.error('Failed to remove cart item:', error);
     return NextResponse.json(
-      { error: 'Failed to remove item from cart' },
+      { error: 'Failed to remove cart item' },
       { status: 500 }
     );
   }

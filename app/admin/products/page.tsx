@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { searchProducts } from './actions'
 import AddProduct from './components/AddProduct'
 import EditProduct from './components/EditProduct'
+import DeleteProduct from './components/DeletePrduct'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -26,7 +27,7 @@ type Product = {
 }
 
 export default function AdminProducts() {
-  const [view, setView] = useState<'add' | 'edit'>('edit')
+  const [view, setView] = useState<'add' | 'edit' | 'delete'>('delete')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [searchResults, setSearchResults] = useState<Product[]>([])
@@ -42,7 +43,6 @@ export default function AdminProducts() {
       setIsSearching(true)
       try {
         const results = await searchProducts(query)
-        // Transform results to match Product type
         setSearchResults(results.map(product => ({
           ...product,
           regularPrice: product.regularPrice,
@@ -90,12 +90,24 @@ export default function AdminProducts() {
           >
             Edit Product
           </Button>
+          <Button 
+            onClick={() => {
+              setView('delete')
+              setSelectedProductId(null)
+              setSearchQuery('')
+              setSearchResults([])
+              setShowResults(false)
+            }}
+            variant={view === 'delete' ? 'default' : 'secondary'}
+          >
+            Delete Products
+          </Button>
         </div>
       </div>
 
       {view === 'add' ? (
         <AddProduct />
-      ) : (
+      ) : view === 'edit' ? (
         <div>
           <div className="relative mb-4">
             <Input 
@@ -106,7 +118,6 @@ export default function AdminProducts() {
               onFocus={() => setShowResults(true)}
             />
 
-            {/* Dropdown for search results */}
             {showResults && (searchResults.length > 0 || isSearching) && (
               <Card className="absolute z-10 w-full mt-1">
                 <ScrollArea className="max-h-[400px]">
@@ -144,6 +155,8 @@ export default function AdminProducts() {
             <EditProduct productId={selectedProductId} />
           )}
         </div>
+      ) : (
+        <DeleteProduct />
       )}
     </div>
   )

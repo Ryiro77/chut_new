@@ -24,8 +24,9 @@ export interface Product {
 
 export interface CartItem {
   id: string;
-  product: Product;
   quantity: number;
+  product: Product;
+  customBuildName?: string | null;
 }
 
 export interface CheckoutFormData {

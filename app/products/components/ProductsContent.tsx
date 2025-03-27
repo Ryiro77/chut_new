@@ -126,6 +126,7 @@ export default function ProductsContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [addingToCart, setAddingToCart] = useState<string | null>(null)
+  const [quantities, setQuantities] = useState<Record<string, number>>({})
   
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -140,6 +141,13 @@ export default function ProductsContent() {
 
   const currentFilters = selectedType !== 'ALL' ? filterOptions[selectedType as keyof typeof filterOptions] || [] : []
 
+  const handleQuantityChange = (productId: string, quantity: number) => {
+    setQuantities(prev => ({
+      ...prev,
+      [productId]: quantity
+    }));
+  };
+
   const handleAddToCart = async (product: Product) => {
     setAddingToCart(product.id)
     try {
@@ -150,7 +158,7 @@ export default function ProductsContent() {
         regularPrice: product.regularPrice,
         discountedPrice: product.discountedPrice,
         isOnSale: product.isOnSale
-      }])
+      }], quantities[product.id] || 1)
       toast.success("Added to cart")
     } catch (error) {
       console.error('Failed to add to cart:', error)
@@ -365,8 +373,8 @@ export default function ProductsContent() {
                             ))}
                         </div>
                       </CardContent>
-                      <CardFooter className="flex justify-between items-center">
-                        <div className="space-y-1">
+                      <CardFooter className="flex flex-col gap-4">
+                        <div className="w-full">
                           {product.isOnSale && product.discountedPrice ? (
                             <>
                               <div className="flex items-center gap-2">
@@ -374,31 +382,52 @@ export default function ProductsContent() {
                                 <span className="text-sm text-muted-foreground line-through">₹{formatPrice(product.regularPrice)}</span>
                               </div>
                               <div className="text-sm text-green-600 font-medium">
-                                {Math.round(product.discountPercentage || 0)}% off
+                                {Math.round(((product.regularPrice - product.discountedPrice) / product.regularPrice) * 100)}% off
                               </div>
                             </>
                           ) : (
                             <span className="text-lg font-semibold">₹{formatPrice(product.regularPrice)}</span>
                           )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="w-full grid grid-cols-2 gap-2">
                           {product.category.name !== 'OTHER' && (
-                            <Button 
-                              variant="outline"
-                              onClick={() => handleAddToBuild(product)}
-                            >
-                              Add to Build
-                            </Button>
+                            <>
+                              <div className="col-span-2 flex items-center justify-end gap-2 mb-2">
+                                <label className="text-sm">Quantity:</label>
+                                <select 
+                                  className="w-20 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                  onChange={(e) => {
+                                    const qty = parseInt(e.target.value);
+                                    handleQuantityChange(product.id, qty);
+                                  }}
+                                  defaultValue="1"
+                                >
+                                  {[...Array(8)].map((_, i) => (
+                                    <option key={i + 1} value={i + 1}>
+                                      {i + 1}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <Button 
+                                variant="outline"
+                                onClick={() => handleAddToBuild(product)}
+                                className="w-full text-sm px-2"
+                              >
+                                Add to Build
+                              </Button>
+                              <Button
+                                onClick={() => handleAddToCart(product)}
+                                disabled={addingToCart === product.id}
+                                className="w-full text-sm px-2"
+                              >
+                                {addingToCart === product.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                ) : null}
+                                Add to Cart
+                              </Button>
+                            </>
                           )}
-                          <Button
-                            onClick={() => handleAddToCart(product)}
-                            disabled={addingToCart === product.id}
-                          >
-                            {addingToCart === product.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                            ) : null}
-                            Add to Cart
-                          </Button>
                         </div>
                       </CardFooter>
                     </Card>

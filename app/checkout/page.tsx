@@ -430,7 +430,7 @@ export default function CheckoutPage() {
                                   <span className="text-sm text-muted-foreground line-through">₹{formatPrice(item.product.regularPrice * item.quantity)}</span>
                                 </div>
                                 <div className="text-sm text-green-600">
-                                  {Math.round(item.product.discountPercentage || 0)}% off
+                                  {Math.round(((item.product.regularPrice - item.product.discountedPrice) / item.product.regularPrice) * 100)}% off
                                 </div>
                               </>
                             ) : (
