@@ -92,12 +92,6 @@ export default function CheckoutPage() {
 
   const fetchCartItems = useCallback(async () => {
     try {
-      // Check session status instead of session data
-      if (status === 'unauthenticated') {
-        router.push('/auth?callbackUrl=/checkout');
-        return;
-      }
-
       const data = await getCartItems();
       if (data.length === 0) {
         router.push('/cart');
@@ -110,13 +104,11 @@ export default function CheckoutPage() {
     } finally {
       setLoading(false);
     }
-  }, [router, status]);
+  }, [router]);
 
   useEffect(() => {
-    if (status !== 'loading') {
-      fetchCartItems();
-    }
-  }, [fetchCartItems, status]);
+    fetchCartItems();
+  }, [fetchCartItems]);
 
   const getTotalPrice = () => {
     return cartItems.reduce((total, item) => {
@@ -228,6 +220,12 @@ export default function CheckoutPage() {
     
     if (!validateForm()) {
       toast.error("Please fill in all required fields correctly");
+      return;
+    }
+
+    // Check authentication before proceeding with order
+    if (status === 'unauthenticated') {
+      router.push('/auth?callbackUrl=/checkout');
       return;
     }
 

@@ -6,11 +6,6 @@ import { razorpay, verifyWebhookSignature } from '@/lib/razorpay'
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { items, shippingDetails }: { 
       items: Array<{
         product: {
@@ -33,6 +28,12 @@ export async function POST(request: NextRequest) {
       };
     } = await request.json();
 
+    // Check for authentication when placing the order
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Authentication required to place order' }, { status: 401 });
+    }
+
     // Calculate total amount considering discounts
     const totalAmount = items.reduce(
       (sum, item) => {
@@ -44,21 +45,14 @@ export async function POST(request: NextRequest) {
       0
     );
 
-    // Create order in database
+    // Create the order
     const order = await prisma.order.create({
       data: {
         userId: session.user.id,
-        status: 'PENDING',
         totalAmount,
-        discountAmount: items.reduce((sum, item) => {
-          if (item.product.isOnSale && item.product.discountedPrice) {
-            const discount = item.product.regularPrice - item.product.discountedPrice;
-            return sum + (discount * item.quantity);
-          }
-          return sum;
-        }, 0),
-        finalAmount: totalAmount,
-        address: shippingDetails.address,
+        finalAmount: totalAmount, // Since we don't have discounts applied yet
+        address: shippingDetails.address, // Required field in Order model
+        status: 'PENDING',
         shippingAddress: {
           create: {
             fullName: shippingDetails.name,
@@ -67,7 +61,7 @@ export async function POST(request: NextRequest) {
             address: shippingDetails.address,
             city: shippingDetails.city,
             state: shippingDetails.state,
-            pincode: shippingDetails.pincode,
+            pincode: shippingDetails.pincode
           }
         },
         items: {
@@ -90,10 +84,11 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // Handle payment method specific logic
     if (shippingDetails.paymentMethod === 'online') {
       // Create Razorpay order
       const razorpayOrder = await razorpay.orders.create({
-        amount: Math.round(totalAmount * 100), // Convert to paise, ensure it's rounded
+        amount: Math.round(totalAmount * 100), // Convert to paise
         currency: 'INR',
         receipt: order.id,
         notes: {
