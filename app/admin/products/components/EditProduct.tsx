@@ -228,6 +228,7 @@ const chipsetOptions = [
     "Intel Z690",
     "Intel H670",
     "Intel B660",
+    "Intel B860",
     "Intel H610",
     "Intel W-series (various)",
     "AMD X670E",

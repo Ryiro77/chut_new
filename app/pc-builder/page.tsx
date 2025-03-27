@@ -203,7 +203,8 @@ export default function PCBuilderPage() {
         name: product.name,
         price: product.isOnSale && product.discountedPrice ? product.discountedPrice : product.regularPrice,
         brand: product.brand,
-        image: mainImage ? getImageUrl(mainImage) : '/no-image.png'
+        image: mainImage ? getImageUrl(mainImage) : '/no-image.png',
+        specs: product.specs // Add specs to the component data
       }
     }));
   };
@@ -257,6 +258,34 @@ export default function PCBuilderPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkSocketCompatibility = () => {
+    const cpu = components.cpu;
+    const motherboard = components.motherboard;
+
+    // If either component is not selected, they are compatible by default
+    if (!cpu.id || !motherboard.id) {
+      return { compatible: true, message: "Components are compatible" };
+    }
+
+    // Get socket specs
+    const cpuSocket = cpu.specs?.find(spec => spec.name === 'Socket')?.value;
+    const mbSocket = motherboard.specs?.find(spec => spec.name === 'Socket')?.value;
+
+    // If socket information is missing, consider them compatible
+    if (!cpuSocket || !mbSocket) {
+      return { compatible: true, message: "Components are compatible" };
+    }
+
+    // Only show incompatibility if sockets explicitly don't match
+    const isCompatible = cpuSocket === mbSocket;
+    return {
+      compatible: isCompatible,
+      message: isCompatible 
+        ? "Components are compatible" 
+        : `Incompatible: CPU socket (${cpuSocket}) does not match motherboard socket (${mbSocket})`
+    };
   };
 
   return (
@@ -382,10 +411,15 @@ export default function PCBuilderPage() {
                       <div className="border-t pt-4">
                         <h3 className="font-semibold mb-2">Compatibility</h3>
                         <div className="text-sm space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                            <span>All components are compatible</span>
-                          </div>
+                          {(() => {
+                            const socketCompat = checkSocketCompatibility();
+                            return (
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${socketCompat.compatible ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                <span>{socketCompat.message}</span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
 

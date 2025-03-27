@@ -50,6 +50,11 @@ export interface Component {
   brand: string | null;
   image?: string;
   isOnSale?: boolean;
+  specs?: Array<{  // Added specs for compatibility checking
+    name: string;
+    value: string;
+    unit?: string | null;
+  }>;
 }
 
 export interface Order {
