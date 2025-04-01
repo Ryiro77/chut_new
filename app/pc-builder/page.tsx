@@ -124,7 +124,6 @@ export default function PCBuilderPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState('');
   const [loading, setLoading] = useState(false);
-  const [buildQuantity, setBuildQuantity] = useState(1);
   const router = useRouter();
 
   const getImageUrl = (image: { url?: string | null, filePath?: string | null } | undefined) => {
@@ -245,7 +244,7 @@ export default function PCBuilderPage() {
       
       await addToCart(
         buildComponents,
-        buildQuantity,
+        1, // Fixed quantity of 1
         true,
         `Custom PC Build (${new Date().toLocaleDateString()})`
       );
@@ -260,32 +259,47 @@ export default function PCBuilderPage() {
     }
   };
 
-  const checkSocketCompatibility = () => {
+  const checkCompatibility = () => {
+    const compatibilityResults = [];
+
+    // Check Socket Compatibility
     const cpu = components.cpu;
     const motherboard = components.motherboard;
-
-    // If either component is not selected, they are compatible by default
-    if (!cpu.id || !motherboard.id) {
-      return { compatible: true, message: "Components are compatible" };
+    if (cpu.id && motherboard.id) {
+      const cpuSocket = cpu.specs?.find(spec => spec.name === 'Socket')?.value;
+      const mbSocket = motherboard.specs?.find(spec => spec.name === 'Socket')?.value;
+      
+      if (cpuSocket && mbSocket && cpuSocket !== mbSocket) {
+        compatibilityResults.push({
+          compatible: false,
+          message: `CPU socket (${cpuSocket}) does not match motherboard socket (${mbSocket})`
+        });
+      }
     }
 
-    // Get socket specs
-    const cpuSocket = cpu.specs?.find(spec => spec.name === 'Socket')?.value;
-    const mbSocket = motherboard.specs?.find(spec => spec.name === 'Socket')?.value;
-
-    // If socket information is missing, consider them compatible
-    if (!cpuSocket || !mbSocket) {
-      return { compatible: true, message: "Components are compatible" };
+    // Check RAM Type Compatibility
+    const ram = components.ram;
+    if (ram.id && motherboard.id) {
+      const ramType = ram.specs?.find(spec => spec.name === 'RAM Type')?.value;
+      const mbRamType = motherboard.specs?.find(spec => spec.name === 'RAM Type')?.value;
+      
+      if (ramType && mbRamType && ramType !== mbRamType) {
+        compatibilityResults.push({
+          compatible: false,
+          message: `RAM type (${ramType}) is not compatible with motherboard RAM type (${mbRamType})`
+        });
+      }
     }
 
-    // Only show incompatibility if sockets explicitly don't match
-    const isCompatible = cpuSocket === mbSocket;
-    return {
-      compatible: isCompatible,
-      message: isCompatible 
-        ? "Components are compatible" 
-        : `Incompatible: CPU socket (${cpuSocket}) does not match motherboard socket (${mbSocket})`
-    };
+    // If no incompatibilities found, return compatible status
+    if (compatibilityResults.length === 0) {
+      return [{
+        compatible: true,
+        message: "Components are compatible"
+      }];
+    }
+
+    return compatibilityResults;
   };
 
   return (
@@ -379,31 +393,9 @@ export default function PCBuilderPage() {
                         ))}
                         <div className="border-t pt-2 mt-4">
                           <div className="flex justify-between font-semibold">
-                            <span>Total per unit</span>
+                            <span>Total</span>
                             <span>₹{getTotalPrice().toLocaleString()}</span>
                           </div>
-                        </div>
-                      </div>
-
-                      {/* Quantity Selection */}
-                      <div className="border-t pt-4">
-                        <div className="flex items-center justify-between">
-                          <label className="font-medium">Quantity:</label>
-                          <select 
-                            className="w-20 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-                            value={buildQuantity}
-                            onChange={(e) => setBuildQuantity(parseInt(e.target.value))}
-                          >
-                            {[...Array(8)].map((_, i) => (
-                              <option key={i + 1} value={i + 1}>
-                                {i + 1}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex justify-between font-semibold mt-2">
-                          <span>Total</span>
-                          <span>₹{(getTotalPrice() * buildQuantity).toLocaleString()}</span>
                         </div>
                       </div>
 
@@ -411,15 +403,12 @@ export default function PCBuilderPage() {
                       <div className="border-t pt-4">
                         <h3 className="font-semibold mb-2">Compatibility</h3>
                         <div className="text-sm space-y-1">
-                          {(() => {
-                            const socketCompat = checkSocketCompatibility();
-                            return (
-                              <div className="flex items-center gap-2">
-                                <div className={`w-2 h-2 rounded-full ${socketCompat.compatible ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                <span>{socketCompat.message}</span>
-                              </div>
-                            );
-                          })()}
+                          {checkCompatibility().map((result, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${result.compatible ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                              <span>{result.message}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
 

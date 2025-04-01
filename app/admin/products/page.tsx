@@ -27,7 +27,7 @@ type Product = {
 }
 
 export default function AdminProducts() {
-  const [view, setView] = useState<'add' | 'edit' | 'delete'>('delete')
+  const [view, setView] = useState<'add' | 'edit' | 'delete'>('add')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [searchResults, setSearchResults] = useState<Product[]>([])

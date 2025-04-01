@@ -79,10 +79,13 @@ const defaultMotherboardSpecs: Spec[] = [
   { name: 'RAM Type', value: '', sortOrder: 2, isHighlight: true },
   { name: 'RAM Slots', value: '', sortOrder: 3, isHighlight: true },
   { name: 'PCIe Generation', value: '', sortOrder: 4, isHighlight: true },
-  { name: 'PCIe Slots', value: '', sortOrder: 5, isHighlight: true },
-  { name: 'SATA Ports', value: '', sortOrder: 6, isHighlight: true },
-  { name: 'M.2 Slots', value: '', sortOrder: 7, isHighlight: true },
-  { name: 'Form Factor', value: '', sortOrder: 8, isHighlight: true }
+  { name: 'PCIe x16 Slots', value: '', sortOrder: 5, isHighlight: true },
+  { name: 'PCIe x8 Slots', value: '', sortOrder: 6, isHighlight: true },
+  { name: 'PCIe x4 Slots', value: '', sortOrder: 7, isHighlight: true },
+  { name: 'PCIe x1 Slots', value: '', sortOrder: 8, isHighlight: true },
+  { name: 'SATA Ports', value: '', sortOrder: 9, isHighlight: true },
+  { name: 'M.2 Slots', value: '', sortOrder: 10, isHighlight: true },
+  { name: 'Form Factor', value: '', sortOrder: 11, isHighlight: true }
 ]
 
 const defaultRamSpecs: Spec[] = [
