@@ -1,449 +1,410 @@
 'use client'
 
-import Image from 'next/image';
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import Image from 'next/image'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Header } from "@/components/Header"
 import { Footer } from "@/components/Footer"
 import { Container } from "@/components/ui/container"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Input } from "@/components/ui/input"
-import { Plus, Loader2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Plus, Share2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Product, Component } from '@/lib/types'
-import { getProducts } from './actions'
 import { addToCart } from '@/lib/api-client'
+import { SelectComponentDialog } from './_components/SelectComponentDialog'
 
-interface SelectComponentDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  componentType: string;
-  onSelect: (product: Product) => void;
+const BUILD_STORAGE_KEY = 'pc_builder_current_build';
+
+const componentTypes = {
+  cpu: 'CPU',
+  motherboard: 'MOTHERBOARD',
+  ram: 'RAM',
+  gpu: 'GPU',
+  storage: 'STORAGE',
+  psu: 'PSU',
+  case: 'CASE',
+  cooler: 'COOLER'
+} as const
+
+type ComponentTypes = typeof componentTypes
+type ComponentsMap = Record<keyof ComponentTypes, Component>
+
+interface CompatibilityResult {
+  compatible: boolean;
+  messages: string[];
 }
 
-function SelectComponentDialog({ open, onOpenChange, componentType, onSelect }: SelectComponentDialogProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const fetchProducts = useCallback(async () => {
-    if (!componentType) return;
-    setLoading(true);
-    try {
-      const data = await getProducts({
-        category: componentType,
-        search: searchQuery,
-      });
-      setProducts(data);
-    } catch (error) {
-      console.error('Failed to fetch products:', error);
-      toast.error('Failed to load products. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery, componentType]);
-
-  useEffect(() => {
-    const debounceTimer = setTimeout(fetchProducts, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [fetchProducts]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>Select {componentType}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <Input
-            placeholder={`Search ${componentType.toLowerCase()}...`}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <ScrollArea className="h-[400px] pr-4">
-            {loading ? (
-              <div className="flex items-center justify-center h-32">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : products.length === 0 ? (
-              <div className="flex items-center justify-center h-32">
-                <span className="text-muted-foreground">No products found</span>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {products.map((product) => (
-                  <Card key={product.id} className="cursor-pointer hover:border-primary/50" onClick={() => {
-                    onSelect(product);
-                    onOpenChange(false);
-                  }}>
-                    <CardHeader className="p-4">
-                      <div className="flex-1">
-                        <h4 className="font-medium">{product.name}</h4>
-                        <p className="text-sm text-muted-foreground">{product.brand}</p>
-                        {product.isOnSale && product.discountedPrice ? (
-                          <div className="mt-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">₹{product.discountedPrice.toLocaleString()}</span>
-                              <span className="text-sm text-muted-foreground line-through">₹{product.regularPrice.toLocaleString()}</span>
-                            </div>
-                            <div className="text-sm text-green-600">
-                              {Math.round(((product.regularPrice - product.discountedPrice) / product.regularPrice) * 100)}% off
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="font-medium mt-1">₹{product.regularPrice.toLocaleString()}</p>
-                        )}
-                      </div>
-                    </CardHeader>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+const initialComponents: ComponentsMap = {
+  cpu: { type: 'CPU', id: null, name: null, price: null, brand: null },
+  motherboard: { type: 'MOTHERBOARD', id: null, name: null, price: null, brand: null },
+  ram: { type: 'RAM', id: null, name: null, price: null, brand: null },
+  gpu: { type: 'GPU', id: null, name: null, price: null, brand: null },
+  storage: { type: 'STORAGE', id: null, name: null, price: null, brand: null },
+  psu: { type: 'PSU', id: null, name: null, price: null, brand: null },
+  case: { type: 'CASE', id: null, name: null, price: null, brand: null },
+  cooler: { type: 'COOLER', id: null, name: null, price: null, brand: null }
+};
 
 export default function PCBuilderPage() {
-  const [components, setComponents] = useState<Record<string, Component>>({
-    cpu: { type: 'CPU', id: null, name: null, price: null, brand: null },
-    motherboard: { type: 'MOTHERBOARD', id: null, name: null, price: null, brand: null },
-    gpu: { type: 'GPU', id: null, name: null, price: null, brand: null },
-    ram: { type: 'RAM', id: null, name: null, price: null, brand: null },
-    storage: { type: 'STORAGE', id: null, name: null, price: null, brand: null },
-    psu: { type: 'PSU', id: null, name: null, price: null, brand: null },
-    case: { type: 'CASE', id: null, name: null, price: null, brand: null },
-    cooler: { type: 'COOLER', id: null, name: null, price: null, brand: null },
-  });
+  const router = useRouter()
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [selectedType, setSelectedType] = useState<keyof typeof componentTypes | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [components, setComponents] = useState<ComponentsMap>(initialComponents)
+  const [compatibilityResult, setCompatibilityResult] = useState<CompatibilityResult>({ compatible: true, messages: [] })
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedType, setSelectedType] = useState('');
-  const [loading, setLoading] = useState(false);
-  const router = useRouter();
-
-  const getImageUrl = (image: { url?: string | null, filePath?: string | null } | undefined) => {
-    if (!image) {
-      return '/no-image.png';
-    }
-
-    if (image.url) {
-      return image.url.startsWith('/') ? image.url : `/${image.url}`;
-    }
-
-    if (image.filePath) {
-      const cleanPath = image.filePath.replace(/^\/uploads\//, '').replace(/^uploads\//, '');
-      return `/uploads/${cleanPath}`;
-    }
-
-    return '/no-image.png';
-  };
-
-  // Handle URL parameters for adding components
+  // Load build from local storage on initial mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
     const searchParams = new URLSearchParams(window.location.search);
-    const productId = searchParams.get('add');
-    const componentType = searchParams.get('type');
+    const buildId = searchParams.get('id');
     
-    if (productId && componentType) {
-      const fetchAndAddProduct = async () => {
+    if (buildId) {
+      // If there's a build ID in the URL, fetch that build
+      const fetchBuild = async () => {
         try {
-          const data = await getProducts({ category: componentType });
-          const product = data.find((p: Product) => p.id === productId);
-          
-          if (product) {
-            const mainImage = product.images?.find((img: { isMain: boolean }) => img.isMain) || product.images?.[0];
-            setComponents(prev => ({
-              ...prev,
-              [componentType.toLowerCase()]: {
-                type: componentType,
-                id: product.id,
-                name: product.name,
-                price: product.isOnSale && product.discountedPrice ? product.discountedPrice : product.regularPrice,
-                brand: product.brand,
-                image: mainImage ? getImageUrl(mainImage) : '/no-image.png'
-              }
-            }));
-            // Clear the URL parameters after adding the component
-            router.replace('/pc-builder');
-          }
+          const response = await fetch(`/api/builds?id=${buildId}`);
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error);
+
+          setComponents(data.components as ComponentsMap);
+          // Save the fetched build to local storage
+          localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(data.components));
+          router.replace('/pc-builder');
         } catch (error) {
-          console.error('Failed to fetch product:', error);
-          toast.error('Failed to add component to build');
+          console.error('Load build error:', error);
+          toast.error('Failed to load shared build');
+          // Try loading from local storage as fallback
+          loadFromLocalStorage();
         }
       };
-
-      fetchAndAddProduct();
+      fetchBuild();
+    } else {
+      // If no build ID, try loading from local storage
+      loadFromLocalStorage();
     }
   }, [router]);
 
-  const getTotalPrice = () => {
-    return Object.values(components)
-      .reduce((total, component) => total + (component.price || 0), 0);
+  // Save to local storage whenever components change
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(components));
+  }, [components]);
+
+  const loadFromLocalStorage = () => {
+    try {
+      const savedBuild = localStorage.getItem(BUILD_STORAGE_KEY);
+      if (savedBuild) {
+        const parsedBuild = JSON.parse(savedBuild);
+        setComponents(parsedBuild);
+      }
+    } catch (error) {
+      console.error('Error loading build from localStorage:', error);
+    }
   };
 
-  const handleSelectComponent = (type: string) => {
-    setSelectedType(type.toUpperCase());
-    setDialogOpen(true);
-  };
+  const handleSelectComponent = (type: keyof typeof componentTypes) => {
+    setSelectedType(type)
+    setDialogOpen(true)
+  }
 
   const handleComponentSelect = (product: Product) => {
-    const mainImage = product.images?.find((img: { isMain: boolean }) => img.isMain) || product.images?.[0];
+    if (!selectedType) return
+    
     setComponents(prev => ({
       ...prev,
-      [selectedType.toLowerCase()]: {
-        type: selectedType,
+      [selectedType]: {
+        type: componentTypes[selectedType],
         id: product.id,
         name: product.name,
         price: product.isOnSale && product.discountedPrice ? product.discountedPrice : product.regularPrice,
         brand: product.brand,
-        image: mainImage ? getImageUrl(mainImage) : '/no-image.png',
-        specs: product.specs // Add specs to the component data
+        image: product.images?.find(img => img.isMain)?.url || 
+               `/uploads/${product.images?.find(img => img.isMain)?.filePath || 
+               product.images?.[0]?.filePath}` ||
+               '/no-image.png',
+        specs: product.specs,
+        isOnSale: product.isOnSale
       }
-    }));
-  };
+    }))
+  }
 
-  const handleRemoveComponent = (type: string) => {
+  const handleRemoveComponent = (type: keyof typeof componentTypes) => {
     setComponents(prev => ({
       ...prev,
-      [type]: {
-        ...prev[type],
-        id: null,
-        name: null,
-        price: null,
-        brand: null,
-      }
-    }));
-  };
+      [type]: { type: componentTypes[type], id: null, name: null, price: null, brand: null }
+    }))
+  }
 
-  const handleAddToCart = async () => {
-    // Check if any component is selected
-    const hasComponents = Object.values(components).some(comp => comp.id !== null);
-    if (!hasComponents) {
-      toast.error("Please select at least one component for your build");
-      return;
-    }
-
-    setLoading(true);
+  const handleShareBuild = async () => {
     try {
-      const buildComponents = Object.values(components)
-        .filter(comp => comp.id !== null)
-        .map(comp => ({
-          id: comp.id!,
-          name: comp.name!,
-          brand: comp.brand!,
-          regularPrice: comp.price!,
-          discountedPrice: undefined,  // Changed from null to undefined to match type
-          isOnSale: false
-        }));
-      
-      await addToCart(
-        buildComponents,
-        1, // Fixed quantity of 1
-        true,
-        `Custom PC Build (${new Date().toLocaleDateString()})`
-      );
-      
-      toast.success("Your custom build has been added to cart");
-      router.push('/cart');
+      // Only create share link if at least one component is selected
+      if (Object.values(components).every(comp => !comp.id)) {
+        toast.error('Please select at least one component to share');
+        return;
+      }
+
+      const response = await fetch('/api/builds', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ components }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      await navigator.clipboard.writeText(data.buildUrl);
+      toast.success('Build link copied to clipboard!');
     } catch (error) {
-      console.error('Failed to add to cart:', error);
-      toast.error("Failed to add items to cart. Please try again.");
-    } finally {
-      setLoading(false);
+      console.error('Share build error:', error);
+      toast.error('Failed to create share link');
     }
-  };
+  }
 
-  const checkCompatibility = () => {
-    const compatibilityResults = [];
-
-    // Check Socket Compatibility
+  const checkCompatibility = useCallback((): CompatibilityResult => {
+    const messages: string[] = [];
     const cpu = components.cpu;
     const motherboard = components.motherboard;
+    const psu = components.psu;
+    const pcCase = components.case;
+    const ram = components.ram;
+
+    // Check CPU Socket Compatibility
     if (cpu.id && motherboard.id) {
-      const cpuSocket = cpu.specs?.find(spec => spec.name === 'Socket')?.value;
-      const mbSocket = motherboard.specs?.find(spec => spec.name === 'Socket')?.value;
+      const cpuSocket = cpu.specs?.find(spec => spec.name.toLowerCase() === 'socket')?.value;
+      const mbSocket = motherboard.specs?.find(spec => spec.name.toLowerCase() === 'socket')?.value;
       
       if (cpuSocket && mbSocket && cpuSocket !== mbSocket) {
-        compatibilityResults.push({
-          compatible: false,
-          message: `CPU socket (${cpuSocket}) does not match motherboard socket (${mbSocket})`
-        });
+        messages.push(`CPU socket (${cpuSocket}) does not match motherboard socket (${mbSocket})`);
       }
     }
 
     // Check RAM Type Compatibility
-    const ram = components.ram;
     if (ram.id && motherboard.id) {
-      const ramType = ram.specs?.find(spec => spec.name === 'RAM Type')?.value;
-      const mbRamType = motherboard.specs?.find(spec => spec.name === 'RAM Type')?.value;
+      const ramType = ram.specs?.find(spec => spec.name.toLowerCase() === 'type')?.value; // Assuming RAM type spec is named 'Type'
+      const mbRamType = motherboard.specs?.find(spec => spec.name.toLowerCase() === 'memory type')?.value; // Assuming MB RAM type spec is named 'Memory Type'
       
-      if (ramType && mbRamType && ramType !== mbRamType) {
-        compatibilityResults.push({
-          compatible: false,
-          message: `RAM type (${ramType}) is not compatible with motherboard RAM type (${mbRamType})`
-        });
+      if (ramType && mbRamType && !mbRamType.toLowerCase().includes(ramType.toLowerCase())) { // Check if MB supports the RAM type (case-insensitive)
+        messages.push(`RAM type (${ramType}) is not compatible with motherboard supported types (${mbRamType})`);
       }
     }
 
-    // If no incompatibilities found, return compatible status
-    if (compatibilityResults.length === 0) {
-      return [{
-        compatible: true,
-        message: "Components are compatible"
-      }];
+    // Check PSU Wattage
+    if (psu.id) {
+      const psuWattage = parseInt(psu.specs?.find(spec => spec.name.toLowerCase() === 'wattage')?.value?.replace('W', '') || '0');
+      // Estimate required wattage (This is a very rough estimate)
+      const cpuTdp = parseInt(cpu.specs?.find(spec => spec.name.toLowerCase() === 'tdp')?.value?.replace('W', '') || '65');
+      const gpuTdp = parseInt(components.gpu.specs?.find(spec => spec.name.toLowerCase() === 'tdp')?.value?.replace('W', '') || '150'); // GPU estimate if not selected
+      const estimatedWattage = cpuTdp + gpuTdp + 100; // Base system power
+
+      if (psuWattage > 0 && psuWattage < estimatedWattage) {
+        messages.push(`PSU wattage (${psuWattage}W) may be insufficient for estimated load (~${estimatedWattage}W)`);
+      }
     }
 
-    return compatibilityResults;
-  };
+    // Check Case Compatibility (Motherboard Form Factor)
+    if (motherboard.id && pcCase.id) {
+      const mbFormFactor = motherboard.specs?.find(spec => spec.name.toLowerCase() === 'form factor')?.value;
+      const caseFormFactorSupport = pcCase.specs?.find(spec => spec.name.toLowerCase() === 'motherboard support')?.value; // Assuming case spec is 'Motherboard Support'
+
+      if (mbFormFactor && caseFormFactorSupport && !caseFormFactorSupport.toLowerCase().includes(mbFormFactor.toLowerCase())) {
+        messages.push(`Case (${pcCase.name || 'Selected Case'}) may not support ${mbFormFactor} motherboards.`);
+      }
+    }
+    
+    // Check Case Compatibility (GPU Length) - Example
+    if (components.gpu.id && pcCase.id) {
+        const gpuLength = parseInt(components.gpu.specs?.find(spec => spec.name.toLowerCase() === 'length')?.value?.replace('mm', '') || '0');
+        const maxGpuLength = parseInt(pcCase.specs?.find(spec => spec.name.toLowerCase() === 'max gpu length')?.value?.replace('mm', '') || '0');
+
+        if (gpuLength > 0 && maxGpuLength > 0 && gpuLength > maxGpuLength) {
+            messages.push(`GPU (${components.gpu.name || 'Selected GPU'}) length (${gpuLength}mm) exceeds case maximum (${maxGpuLength}mm).`);
+        }
+    }
+
+    return { compatible: messages.length === 0, messages };
+  }, [components]); // Add components as dependency
+
+  const handleAddToCart = async () => {
+    setLoading(true)
+    try {
+      const currentCompatibility = checkCompatibility();
+      setCompatibilityResult(currentCompatibility);
+
+      if (!currentCompatibility.compatible) {
+        toast.error("Please resolve compatibility issues before adding to cart");
+        return;
+      }
+
+      const items = Object.values(components)
+        .filter(comp => comp.id)
+        .map(comp => ({
+          id: comp.id!,
+          name: comp.name!,
+          brand: comp.brand!,
+          regularPrice: comp.price!, 
+          discountedPrice: comp.isOnSale && comp.price ? comp.price : undefined,  // Ensure it's undefined, not null
+          isOnSale: Boolean(comp.isOnSale)
+        }))
+
+      if (items.length === 0) {
+        toast.error('Please select at least one component')
+        return
+      }
+
+      await addToCart(items, 1, true) // Add isCustomBuild flag
+      toast.success('Components added to cart')
+      router.push('/cart')
+    } catch (error) {
+      console.error("Add to cart error:", error);
+      toast.error('Failed to add components to cart');
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Calculate total price
+  const totalPrice = Object.values(components).reduce((sum, component) => {
+    return sum + (component.price || 0);
+  }, 0);
+
+  // Update compatibility whenever components change
+  useEffect(() => {
+    setCompatibilityResult(checkCompatibility());
+  }, [components, checkCompatibility]);
 
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
-        <main className="flex-1">
-          <Container className="py-8">
-            <h1 className="text-2xl font-bold mb-6">Custom PC Builder</h1>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr,400px] gap-6">
-              {/* Component Selection Section */}
-              <div className="space-y-4">
-                {Object.entries(components).map(([key, component]) => (
-                  <Card key={key} className="border-2 hover:border-primary/50">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">{component.type}</CardTitle>
-                        <div className="space-x-2">
-                          {component.name && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleRemoveComponent(key)}
-                            >
-                              Remove
-                            </Button>
-                          )}
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleSelectComponent(key)}
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            {component.name ? 'Change' : 'Add'}
+      
+      <main className="flex-1">
+        <Container className="py-8">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">PC Builder</h1>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Components List - Takes 2/3 width on large screens */}
+            <div className="lg:col-span-2 space-y-4">
+              {(Object.entries(components) as [keyof typeof componentTypes, Component][]).map(([type, component]) => (
+                <Card key={type}>
+                  <CardHeader className="py-4">
+                    <CardTitle className="text-lg">{componentTypes[type]}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {component.id ? (
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                        <div className="relative w-20 h-20 flex-shrink-0">
+                          <Image
+                            src={component.image ? 
+                              component.image.startsWith('/') ? component.image : `/uploads/${component.image}` 
+                              : '/no-image.png'
+                            }
+                            alt={component.name || ''}
+                            fill
+                            className="object-contain rounded-md"
+                            sizes="80px"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium truncate">{component.name}</h4>
+                          <p className="text-sm text-muted-foreground">{component.brand}</p>
+                          <p className="font-medium mt-1">₹{component.price?.toLocaleString()}</p>
+                        </div>
+                        <div className="flex gap-2 mt-2 sm:mt-0 flex-shrink-0">
+                          <Button size="sm" onClick={() => handleSelectComponent(type)}>
+                            Change
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleRemoveComponent(type)}>
+                            Remove
                           </Button>
                         </div>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      {component.name ? (
-                        <div className="flex items-center gap-4">
-                          {component.image && (
-                            <div className="relative w-16 h-16 rounded-lg overflow-hidden">
-                              
-                              
-                              <Image
-                                src={component.image}
-                                alt={component.name}
-                                className="object-cover w-full h-full"
-                                layout="fill"
-                                objectFit="cover"
-                              />
-                            </div>
-                          )}
-                          <div className="flex-1 flex items-center justify-between">
-                            <div>
-                              <div className="font-medium text-sm">{component.name}</div>
-                              <div className="text-xs text-muted-foreground">{component.brand}</div>
-                            </div>
-                            <div className="font-semibold text-sm">
-                              ₹{component.price?.toLocaleString()}
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground">
-                          No {component.type.toLowerCase()} selected
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              {/* Build Summary Section */}
-              <div className="lg:sticky lg:top-4 space-y-4 h-fit">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Build Summary</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {/* Component List */}
-                      <div className="space-y-2">
-                        {Object.values(components).map((component) => (
-                          <div key={component.type} className="flex justify-between text-sm">
-                            <span>{component.type}</span>
-                            <span>{component.price ? `₹${component.price.toLocaleString()}` : '-'}</span>
-                          </div>
-                        ))}
-                        <div className="border-t pt-2 mt-4">
-                          <div className="flex justify-between font-semibold">
-                            <span>Total</span>
-                            <span>₹{getTotalPrice().toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Compatibility Check */}
-                      <div className="border-t pt-4">
-                        <h3 className="font-semibold mb-2">Compatibility</h3>
-                        <div className="text-sm space-y-1">
-                          {checkCompatibility().map((result, index) => (
-                            <div key={index} className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full ${result.compatible ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                              <span>{result.message}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Add to Cart Button */}
-                      <Button 
-                        className="w-full mt-4" 
-                        size="lg"
-                        onClick={handleAddToCart}
-                        disabled={loading}
-                      >
-                        {loading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Adding to Cart...
-                          </>
-                        ) : (
-                          'Add Build to Cart'
-                        )}
+                    ) : (
+                      <Button variant="outline" onClick={() => handleSelectComponent(type)} className="w-full">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Select {componentTypes[type]}
                       </Button>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
-              </div>
+              ))}
             </div>
-          </Container>
-        </main>
-      </Suspense>
-      <Footer />
+
+            {/* Build Summary - Takes 1/3 width on large screens */}
+            <div className="lg:col-span-1 space-y-4">
+              <Card className="sticky top-24">
+                <CardHeader>
+                  <CardTitle>Build Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Compatibility</h4>
+                    {compatibilityResult.compatible ? (
+                      <Badge variant="success">Compatible</Badge>
+                    ) : (
+                      <div className="space-y-1">
+                        <Badge variant="destructive">Incompatible</Badge>
+                        <ul className="list-disc list-inside text-sm text-destructive">
+                          {compatibilityResult.messages.map((msg, index) => (
+                            <li key={index}>{msg}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Estimated Total</h4>
+                    <p className="text-2xl font-bold">₹{totalPrice.toLocaleString()}</p>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex flex-col gap-2">
+                  <Button onClick={handleAddToCart} disabled={loading || Object.values(components).every(c => !c.id)} className="w-full">
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : null}
+                    Add Build to Cart
+                  </Button>
+                  <Button variant="outline" onClick={handleShareBuild} className="w-full">
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share Build
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
+          </div>
+        </Container>
+      </main>
 
       <SelectComponentDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        componentType={selectedType}
+        componentType={selectedType ? componentTypes[selectedType] : undefined}
         onSelect={handleComponentSelect}
       />
+
+      <Footer />
     </div>
-  );
+  )
 }
+
+// Note: Ensure you have a 'success' variant defined in your components/ui/badge.tsx
+// Example for badge.tsx:
+// const badgeVariants = cva(
+//   "...",
+//   variants: {
+//     variant: {
+//       default: "...",
+//       secondary: "...",
+//       destructive: "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
+//       success: "border-transparent bg-green-600 text-white shadow hover:bg-green-600/80", // Added success variant
+//       outline: "text-foreground",
+//     },
+//   },
+//   ...
+// )

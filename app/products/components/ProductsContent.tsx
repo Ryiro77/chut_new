@@ -344,9 +344,8 @@ export default function ProductsContent() {
                           <Image
                             src={
                               product.images.find(img => img.isMain)?.url || 
-                              product.images[0]?.url ||
-                              `/uploads/products/${product.images.find(img => img.isMain)?.filePath?.split('/').pop() || 
-                              product.images[0]?.filePath?.split('/').pop()}` ||
+                              `/uploads/${product.images.find(img => img.isMain)?.filePath || 
+                              product.images[0]?.filePath}` ||
                               '/no-image.png'
                             }
                             alt={product.name}

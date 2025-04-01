@@ -591,7 +591,7 @@ export default function EditProduct({ productId }: { productId: string }) {
                     <div key={image.id} className="relative group">
                       <div className="aspect-square relative border rounded-md overflow-hidden">
                         <Image
-                          src={image.url ? image.url : `/uploads/products/${image.filePath.split('/').pop()}`}
+                          src={image.url ? image.url : `/uploads/${image.filePath}`}
                           alt="Product"
                           fill
                           className="object-cover"

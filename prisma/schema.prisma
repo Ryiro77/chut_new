@@ -100,16 +100,20 @@ model Category {
 
 model PCBuild {
   id          String       @id @default(cuid())
+  shortId     String       @unique
   name        String
   description String?      @db.Text
-  userId      String
-  user        User        @relation(fields: [userId], references: [id])
+  userId      String?
+  user        User?       @relation(fields: [userId], references: [id])
   items       BuildItem[]
+  components  Json        // Store component data as JSON
   isPublic    Boolean     @default(false)
   totalPrice  Decimal     @db.Decimal(10, 2)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   sharedAs    SharedBuild[]
+
+  @@index([shortId])
 }
 
 model BuildItem {
@@ -149,7 +153,7 @@ model Order {
   address         String      // Simplified from shippingAddress
   paymentStatus   PaymentStatus @default(PENDING)
   createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  updatedAt       DateTime    @default(now())
   appliedDiscount Discount?   @relation(fields: [discountId], references: [id])
   discountId      String?
   notes           String?     @db.Text
