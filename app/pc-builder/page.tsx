@@ -9,7 +9,7 @@ import { Container } from "@/components/ui/container"
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Share2, Loader2 } from "lucide-react"
+import { Plus, Share2, Save, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Product, Component } from '@/lib/types'
 import { addToCart } from '@/lib/api-client'
@@ -54,235 +54,9 @@ export default function PCBuilderPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedType, setSelectedType] = useState<keyof typeof componentTypes | null>(null)
   const [loading, setLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const [components, setComponents] = useState<ComponentsMap>(initialComponents)
   const [compatibilityResult, setCompatibilityResult] = useState<CompatibilityResult>({ compatible: true, messages: [] })
-
-  const loadSavedBuild = useCallback(async () => {
-    try {
-      let loadedComponents = null;
-
-      if (session?.user) {
-        // Try to load from user's account first
-        try {
-          const response = await fetch('/api/builds/latest');
-          const data = await response.json();
-          if (response.ok && data.components) {
-            // Type check and only load if there's at least one component
-            const components = data.components as ComponentsMap;
-            if (!Object.values(components).every((comp: Component) => !comp.id)) {
-              loadedComponents = components;
-            }
-          }
-        } catch (error) {
-          console.error('Error loading from API:', error);
-        }
-      }
-
-      // If no build found in account or not logged in, try local storage
-      if (!loadedComponents) {
-        const savedBuild = localStorage.getItem(BUILD_STORAGE_KEY);
-        if (savedBuild) {
-          const parsed = JSON.parse(savedBuild) as ComponentsMap;
-          // Only load if there's at least one component
-          if (!Object.values(parsed).every((comp: Component) => !comp.id)) {
-            loadedComponents = parsed;
-          }
-        }
-      }
-
-      // Set components to either loaded build or initial empty state
-      setComponents(loadedComponents || initialComponents);
-    } catch (error) {
-      console.error('Error loading build:', error);
-      toast.error('Failed to load saved build');
-      setComponents(initialComponents);
-    }
-  }, [session]);
-
-  // Load build on initial mount or session change
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const searchParams = new URLSearchParams(window.location.search);
-    const buildId = searchParams.get('id');
-    
-    if (buildId) {
-      // If there's a build ID in the URL, fetch that build
-      const fetchBuild = async () => {
-        try {
-          const response = await fetch(`/api/builds?id=${buildId}`);
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error);
-          
-          const newComponents = data.components as ComponentsMap;
-          setComponents(newComponents);
-
-          // Save to local storage with timestamp
-          localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
-            ...newComponents,
-            timestamp: Date.now()
-          }));
-          
-          if (session?.user) {
-            await fetch('/api/builds', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                components: newComponents,
-                name: 'Imported Build',
-                isPublic: false
-              }),
-            });
-          }
-          
-          router.replace('/pc-builder');
-        } catch (error) {
-          console.error('Load build error:', error);
-          toast.error('Failed to load shared build');
-          loadSavedBuild();
-        }
-      };
-      fetchBuild();
-    } else {
-      loadSavedBuild();
-    }
-  }, [router, session, loadSavedBuild]);
-
-  // Save build whenever components change
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
-    const saveBuild = async () => {
-      // Check if build is empty
-      if (Object.values(components).every(comp => !comp.id)) {
-        // Clear storage if build is empty
-        localStorage.removeItem(BUILD_STORAGE_KEY);
-        return;
-      }
-
-      // Always save to local storage with timestamp
-      localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
-        ...components,
-        timestamp: Date.now()
-      }));
-
-      // If logged in, also save to user's account with debounce
-      if (session?.user) {
-        try {
-          await fetch('/api/builds', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              components,
-              name: 'Current Build',
-              isPublic: false
-            }),
-          });
-        } catch (error) {
-          console.error('Failed to save build to account:', error);
-        }
-      }
-    };
-
-    // Debounce save to API but not local storage
-    const timeoutId = setTimeout(saveBuild, 1000);
-    return () => clearTimeout(timeoutId);
-  }, [components, session]);
-
-  const handleSelectComponent = (type: keyof typeof componentTypes) => {
-    setSelectedType(type)
-    setDialogOpen(true)
-  }
-
-  const handleComponentSelect = (product: Product) => {
-    if (!selectedType) return;
-    
-    const updatedComponents = {
-      ...components,
-      [selectedType]: {
-        type: componentTypes[selectedType],
-        id: product.id,
-        name: product.name,
-        price: product.isOnSale && product.discountedPrice ? product.discountedPrice : product.regularPrice,
-        brand: product.brand,
-        image: product.images?.find(img => img.isMain)?.url || 
-               `/uploads/${product.images?.find(img => img.isMain)?.filePath || 
-               product.images?.[0]?.filePath}` ||
-               '/no-image.png',
-        specs: product.specs,
-        isOnSale: product.isOnSale
-      }
-    };
-    
-    setComponents(updatedComponents);
-    // Immediately update local storage
-    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(updatedComponents));
-  }
-
-  const handleRemoveComponent = (type: keyof typeof componentTypes) => {
-    const updatedComponents = {
-      ...components,
-      [type]: { type: componentTypes[type], id: null, name: null, price: null, brand: null }
-    };
-    
-    // Check if this removal makes the build empty
-    const isBuildEmpty = Object.values(updatedComponents).every(comp => !comp.id);
-    
-    if (isBuildEmpty) {
-      // If build is now empty, reset to initial state and clear storage
-      setComponents(initialComponents);
-      localStorage.removeItem(BUILD_STORAGE_KEY);
-      
-      // Also clear from user's account if logged in
-      if (session?.user) {
-        fetch('/api/builds', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            components: initialComponents,
-            name: 'Current Build',
-            isPublic: false
-          }),
-        }).catch(error => {
-          console.error('Failed to clear build from account:', error);
-        });
-      }
-    } else {
-      // If build still has components, update normally
-      setComponents(updatedComponents);
-      localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
-        ...updatedComponents,
-        timestamp: Date.now()
-      }));
-    }
-  };
-
-  const handleShareBuild = async () => {
-    try {
-      // Only create share link if at least one component is selected
-      if (Object.values(components).every(comp => !comp.id)) {
-        toast.error('Please select at least one component to share');
-        return;
-      }
-
-      const response = await fetch('/api/builds', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ components }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-
-      await navigator.clipboard.writeText(data.buildUrl);
-      toast.success('Build link copied to clipboard!');
-    } catch (error) {
-      console.error('Share build error:', error);
-      toast.error('Failed to create share link');
-    }
-  }
 
   const checkCompatibility = useCallback((): CompatibilityResult => {
     const messages: string[] = [];
@@ -291,6 +65,7 @@ export default function PCBuilderPage() {
     const psu = components.psu;
     const pcCase = components.case;
     const ram = components.ram;
+    const gpu = components.gpu;
 
     // Check CPU Socket Compatibility
     if (cpu.id && motherboard.id) {
@@ -331,38 +106,261 @@ export default function PCBuilderPage() {
     // Check PSU Wattage
     if (psu.id) {
       const psuWattage = parseInt(psu.specs?.find(spec => spec.name.toLowerCase() === 'wattage')?.value?.replace('W', '') || '0');
-      // Estimate required wattage (This is a very rough estimate)
+      // Calculate required wattage
       const cpuTdp = parseInt(cpu.specs?.find(spec => spec.name.toLowerCase() === 'tdp')?.value?.replace('W', '') || '65');
-      const gpuTdp = parseInt(components.gpu.specs?.find(spec => spec.name.toLowerCase() === 'tdp')?.value?.replace('W', '') || '150'); // GPU estimate if not selected
-      const estimatedWattage = cpuTdp + gpuTdp + 100; // Base system power
+      const gpuTdp = parseInt(gpu.specs?.find(spec => spec.name.toLowerCase() === 'tdp')?.value?.replace('W', '') || '150');
+      const estimatedWattage = cpuTdp + gpuTdp + 150; // Base system power + overhead
 
       if (psuWattage > 0 && psuWattage < estimatedWattage) {
-        messages.push(`PSU wattage (${psuWattage}W) may be insufficient for estimated load (~${estimatedWattage}W)`);
+        messages.push(`PSU wattage (${psuWattage}W) may be insufficient for estimated system load (~${estimatedWattage}W)`);
       }
     }
 
     // Check Case Compatibility (Motherboard Form Factor)
     if (motherboard.id && pcCase.id) {
-      const mbFormFactor = motherboard.specs?.find(spec => spec.name.toLowerCase() === 'form factor')?.value;
-      const caseFormFactorSupport = pcCase.specs?.find(spec => spec.name.toLowerCase() === 'motherboard support')?.value; // Assuming case spec is 'Motherboard Support'
+      const mbFormFactor = motherboard.specs?.find(spec => spec.name.toLowerCase() === 'form factor')?.value?.toLowerCase();
+      const caseFormFactorSpec = pcCase.specs?.find(spec => spec.name.toLowerCase() === 'case form factor' || spec.name.toLowerCase() === 'form factor');
+      const caseFormFactor = caseFormFactorSpec?.value?.toLowerCase();
 
-      if (mbFormFactor && caseFormFactorSupport && !caseFormFactorSupport.toLowerCase().includes(mbFormFactor.toLowerCase())) {
-        messages.push(`Case (${pcCase.name || 'Selected Case'}) may not support ${mbFormFactor} motherboards.`);
+      if (mbFormFactor && caseFormFactor) {
+        if (!caseFormFactor.includes(mbFormFactor)) {
+          messages.push(`Case may not support ${mbFormFactor.toUpperCase()} motherboards`);
+        }
       }
     }
-    
-    // Check Case Compatibility (GPU Length) - Example
-    if (components.gpu.id && pcCase.id) {
-        const gpuLength = parseInt(components.gpu.specs?.find(spec => spec.name.toLowerCase() === 'length')?.value?.replace('mm', '') || '0');
-        const maxGpuLength = parseInt(pcCase.specs?.find(spec => spec.name.toLowerCase() === 'max gpu length')?.value?.replace('mm', '') || '0');
 
-        if (gpuLength > 0 && maxGpuLength > 0 && gpuLength > maxGpuLength) {
-            messages.push(`GPU (${components.gpu.name || 'Selected GPU'}) length (${gpuLength}mm) exceeds case maximum (${maxGpuLength}mm).`);
+    // Check Case Compatibility (GPU Length)
+    if (gpu.id && pcCase.id) {
+      const gpuLength = parseInt(gpu.specs?.find(spec => spec.name.toLowerCase() === 'length')?.value?.replace('mm', '') || '0');
+      const maxGpuLength = parseInt(pcCase.specs?.find(spec => spec.name.toLowerCase() === 'max gpu length')?.value?.replace('mm', '') || '0');
+
+      if (gpuLength > 0 && maxGpuLength > 0 && gpuLength > maxGpuLength) {
+        messages.push(`GPU length (${gpuLength}mm) exceeds case maximum (${maxGpuLength}mm)`);
+      }
+    }
+
+    // Check CPU Cooler Compatibility
+    if (cpu.id && components.cooler.id) {
+      const cpuSocket = cpu.specs?.find(spec => spec.name.toLowerCase() === 'socket')?.value;
+      const coolerSocket = components.cooler.specs?.find(spec => spec.name.toLowerCase() === 'cooler socket')?.value;
+
+      if (cpuSocket && coolerSocket) {
+        if (!coolerSocket.includes(cpuSocket)) {
+          messages.push(`CPU cooler may not be compatible with ${cpuSocket} socket`);
         }
+      }
+
+      const cpuTdp = parseInt(cpu.specs?.find(spec => spec.name.toLowerCase() === 'tdp')?.value?.replace('W', '') || '0');
+      const coolerTdp = parseInt(components.cooler.specs?.find(spec => spec.name.toLowerCase() === 'tdp')?.value?.replace('W', '') || '0');
+
+      if (cpuTdp > 0 && coolerTdp > 0 && coolerTdp < cpuTdp) {
+        messages.push(`CPU cooler TDP (${coolerTdp}W) may be insufficient for CPU TDP (${cpuTdp}W)`);
+      }
     }
 
     return { compatible: messages.length === 0, messages };
-  }, [components]); // Add components as dependency
+  }, [components]);
+
+  // Handle localStorage on mount
+  useEffect(() => {
+    setMounted(true)
+    const saved = localStorage.getItem(BUILD_STORAGE_KEY)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        // Ensure we're getting the components from the correct structure
+        const savedComponents = parsed.components || parsed
+        // Validate the structure before setting
+        if (savedComponents && typeof savedComponents === 'object') {
+          // Ensure all required component types exist
+          const validatedComponents = { ...initialComponents }
+          Object.keys(componentTypes).forEach((key) => {
+            const componentKey = key as keyof typeof componentTypes
+            if (savedComponents[componentKey] && savedComponents[componentKey].type === componentTypes[componentKey]) {
+              validatedComponents[componentKey] = savedComponents[componentKey]
+            }
+          })
+          setComponents(validatedComponents)
+        }
+      } catch (e) {
+        console.error('Error parsing saved build:', e)
+      }
+    }
+  }, [])
+
+  // Load build on mount or when session changes
+  useEffect(() => {
+    if (!mounted) return;
+    
+    const searchParams = new URLSearchParams(window.location.search)
+    const buildId = searchParams.get('id')
+    
+    const loadBuild = async () => {
+      if (buildId) {
+        try {
+          const response = await fetch(`/api/builds?id=${buildId}`)
+          const data = await response.json()
+          
+          if (!response.ok || !data.components) {
+            toast.error(data.error || 'Failed to load build')
+            return
+          }
+
+          // Set the components from the shared build
+          setComponents(data.components)
+          
+          // Clear the URL parameter without triggering a refresh
+          window.history.replaceState({}, '', '/pc-builder')
+          
+          // Save to localStorage immediately
+          localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
+            components: data.components,
+            timestamp: Date.now()
+          }))
+        } catch (error) {
+          console.error('Load build error:', error)
+          toast.error('Failed to load shared build')
+        }
+      }
+    }
+
+    loadBuild()
+  }, [router, session, mounted])
+
+  // Auto-save to storage when components change
+  useEffect(() => {
+    if (!mounted) return
+    
+    // Only save to localStorage, remove the auto-save to account
+    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
+      components,
+      timestamp: Date.now()
+    }))
+  }, [components, mounted])
+
+  // Update compatibility whenever components change
+  useEffect(() => {
+    if (!mounted) return;
+    setCompatibilityResult(checkCompatibility());
+  }, [components, checkCompatibility, mounted]);
+
+  // Don't render anything until after hydration
+  if (!mounted) {
+    return null;
+  }
+
+  const handleSelectComponent = (type: keyof typeof componentTypes) => {
+    setSelectedType(type)
+    setDialogOpen(true)
+  }
+
+  const handleComponentSelect = (product: Product) => {
+    if (!selectedType) return;
+    
+    const updatedComponents = {
+      ...components,
+      [selectedType]: {
+        type: componentTypes[selectedType],
+        id: product.id,
+        name: product.name,
+        price: product.isOnSale && product.discountedPrice ? product.discountedPrice : product.regularPrice,
+        brand: product.brand,
+        image: product.images?.find(img => img.isMain)?.url || 
+               `/uploads/${product.images?.find(img => img.isMain)?.filePath || 
+               product.images?.[0]?.filePath}` ||
+               '/no-image.png',
+        specs: product.specs,
+        isOnSale: product.isOnSale
+      }
+    };
+    
+    setComponents(updatedComponents);
+    // Only save to local storage, not to account
+    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
+      components: updatedComponents,
+      timestamp: Date.now()
+    }));
+  }
+
+  const handleRemoveComponent = (type: keyof typeof componentTypes) => {
+    const updatedComponents = {
+      ...components,
+      [type]: { type: componentTypes[type], id: null, name: null, price: null, brand: null }
+    };
+    
+    // Update components state
+    setComponents(updatedComponents);
+    
+    // Save to local storage only
+    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
+      components: updatedComponents,
+      timestamp: Date.now()
+    }));
+  };
+
+  const handleShareBuild = async () => {
+    try {
+      // Only create share link if at least one component is selected
+      if (Object.values(components).every(comp => !comp.id)) {
+        toast.error('Please select at least one component to share');
+        return;
+      }
+
+      const response = await fetch('/api/builds', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ components }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      await navigator.clipboard.writeText(data.buildUrl);
+      toast.success('Build link copied to clipboard!');
+    } catch (error) {
+      console.error('Share build error:', error);
+      toast.error('Failed to create share link');
+    }
+  }
+
+  const handleSaveBuild = async () => {
+    try {
+      // Only save if at least one component is selected
+      if (Object.values(components).every(comp => !comp.id)) {
+        toast.error('Please select at least one component to save');
+        return;
+      }
+
+      if (!session?.user) {
+        toast.error('Please sign in to save builds');
+        router.push('/auth?callbackUrl=/pc-builder');
+        return;
+      }
+
+      setLoading(true);
+      const response = await fetch('/api/builds', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          components,
+          name: 'Saved Build',
+          isPublic: false
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to save build');
+      toast.success('Build saved to your profile');
+    } catch (error) {
+      console.error('Save build error:', error);
+      toast.error('Failed to save build');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleAddToCart = async () => {
     setLoading(true)
@@ -406,11 +404,6 @@ export default function PCBuilderPage() {
   const totalPrice = Object.values(components).reduce((sum, component) => {
     return sum + (component.price || 0);
   }, 0);
-
-  // Update compatibility whenever components change
-  useEffect(() => {
-    setCompatibilityResult(checkCompatibility());
-  }, [components, checkCompatibility]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -504,10 +497,16 @@ export default function PCBuilderPage() {
                     ) : null}
                     Add Build to Cart
                   </Button>
-                  <Button variant="outline" onClick={handleShareBuild} className="w-full">
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share Build
-                  </Button>
+                  <div className="flex gap-2 w-full">
+                    <Button variant="outline" onClick={handleShareBuild} className="flex-1" disabled={loading}>
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Share Build
+                    </Button>
+                    <Button variant="outline" onClick={handleSaveBuild} className="flex-1" disabled={loading}>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Build
+                    </Button>
+                  </div>
                 </CardFooter>
               </Card>
             </div>

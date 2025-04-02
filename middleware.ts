@@ -12,23 +12,39 @@ export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname === '/auth') {
     if (token) {
       const callbackUrl = request.nextUrl.searchParams.get('callbackUrl')
-      // If user is logged in, redirect to callback URL or home
       return NextResponse.redirect(new URL(callbackUrl || '/', request.nextUrl.origin))
+    }
+    return NextResponse.next()
+  }
+
+  // Handle admin login page
+  if (request.nextUrl.pathname === '/admin-login') {
+    const adminAuth = request.cookies.get('admin-auth')?.value
+    
+    // If already authenticated as admin, redirect to returnTo or stay on current page
+    if (adminAuth === process.env.ADMIN_PASSWORD) {
+      const returnTo = request.nextUrl.searchParams.get('returnTo')
+      if (returnTo) {
+        return NextResponse.redirect(new URL(returnTo, request.nextUrl.origin))
+      }
+      return NextResponse.next()
     }
     return NextResponse.next()
   }
 
   // Protect admin routes
   if (request.nextUrl.pathname.startsWith('/admin')) {
-    const adminAuth = request.cookies.get('admin-auth')
-    const adminPassword = process.env.ADMIN_PASSWORD
+    // Check if admin password is configured
+    if (!process.env.ADMIN_PASSWORD) {
+      console.error('ADMIN_PASSWORD environment variable is not set')
+      return new NextResponse('Server configuration error', { status: 500 })
+    }
+
+    const adminAuth = request.cookies.get('admin-auth')?.value
     
     // If no admin auth cookie exists or it doesn't match our password
-    if (!adminAuth || adminAuth.value !== adminPassword) {
-      // Get the full URL they were trying to visit
+    if (!adminAuth || adminAuth !== process.env.ADMIN_PASSWORD) {
       const returnTo = request.nextUrl.pathname + request.nextUrl.search
-      
-      // Create an absolute URL for the login page
       return NextResponse.redirect(new URL(`/admin-login?returnTo=${encodeURIComponent(returnTo)}`, request.nextUrl.origin))
     }
     return NextResponse.next()
@@ -40,24 +56,12 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/orders')
   ) {
     if (!token) {
-      // If user is not logged in, redirect to login with callback
       const callbackUrl = request.nextUrl.pathname + request.nextUrl.search
       return NextResponse.redirect(
         new URL(`/auth?callbackUrl=${encodeURIComponent(callbackUrl)}`, request.nextUrl.origin)
       )
     }
     return NextResponse.next()
-  }
-  
-  // If we're on admin-login page and already authenticated as admin
-  if (request.nextUrl.pathname === '/admin-login') {
-    const adminAuth = request.cookies.get('admin-auth')
-    const adminPassword = process.env.ADMIN_PASSWORD
-    
-    if (adminAuth?.value === adminPassword) {
-      const returnTo = request.nextUrl.searchParams.get('returnTo')
-      return NextResponse.redirect(new URL(returnTo || '/admin/dashboard', request.nextUrl.origin))
-    }
   }
   
   return NextResponse.next()

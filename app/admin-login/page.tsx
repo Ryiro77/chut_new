@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense, useEffect } from 'react'
+import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,24 +13,23 @@ function AdminLoginContent() {
   const searchParams = useSearchParams()
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  
-  // Redirect if already authenticated as admin
-  useEffect(() => {
-    const adminAuth = document.cookie.includes(`admin-auth=${process.env.NEXT_PUBLIC_ADMIN_PASSWORD}`)
-    if (adminAuth) {
-      window.location.replace('/admin/dashboard')
-    }
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     
     try {
-      if (password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
-        // Set the admin auth cookie
-        document.cookie = `admin-auth=${password}; path=/`
-        
+      const response = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
         // Get return URL or default to dashboard
         const returnTo = searchParams.get('returnTo')
         const redirectPath = returnTo || '/admin/dashboard'
@@ -41,10 +40,10 @@ function AdminLoginContent() {
         // Use replace to force a page refresh and prevent going back to login
         window.location.replace(redirectPath)
       } else {
-        toast.error('Invalid password')
+        toast.error(data.error || 'Invalid password')
       }
     } catch (error) {
-      toast.error('Login failed')
+      toast.error('Login failed. Please try again.')
       console.error('Login error:', error)
     } finally {
       setIsLoading(false)
@@ -58,7 +57,7 @@ function AdminLoginContent() {
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl">Admin Login</CardTitle>
             <CardDescription>
-              Enter the admin password to continue
+              Enter your admin password to continue
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
@@ -71,6 +70,8 @@ function AdminLoginContent() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
+                  autoComplete="current-password"
+                  required
                 />
               </div>
             </CardContent>

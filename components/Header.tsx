@@ -34,7 +34,8 @@ const categories = [
   { name: "Storage", href: "/products?category=storage", type: "STORAGE" },
   { name: "PSUs", href: "/products?category=psu", type: "PSU" },
   { name: "Cases", href: "/products?category=case", type: "CASE" },
-  { name: "Coolers", href: "/products?category=cooler", type: "COOLER" }
+  { name: "Coolers", href: "/products?category=cooler", type: "COOLER" },
+  { name: "Other", href: "/products?category=other", type: "OTHER" }
 ]
 
 export function Header() {

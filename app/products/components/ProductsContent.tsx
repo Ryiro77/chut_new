@@ -50,7 +50,7 @@ interface Product {
   }>;
 }
 
-const componentTypes = ['ALL', 'CPU', 'GPU', 'MOTHERBOARD', 'RAM', 'STORAGE', 'PSU', 'CASE', 'COOLER'] as const
+const componentTypes = ['ALL', 'CPU', 'GPU', 'MOTHERBOARD', 'RAM', 'STORAGE', 'PSU', 'CASE', 'COOLER', 'OTHER'] as const
 type ComponentType = (typeof componentTypes)[number]
 
 type BaseFilter = {
@@ -108,6 +108,9 @@ const filterOptions: Record<Exclude<ComponentType, 'ALL'>, readonly FilterOption
   COOLER: [
     { id: 'type', label: 'Type', options: ['Air', 'AIO Liquid', 'Custom Loop'] },
     { id: 'size', label: 'Size', options: ['120mm', '240mm', '280mm', '360mm'] }
+  ],
+  OTHER: [
+    { id: 'category', label: 'Category', options: ['Monitor', 'Keyboard', 'Mouse', 'Headset', 'Webcam', 'Microphone', 'Speakers'] }
   ]
 } as const
 
@@ -388,45 +391,43 @@ export default function ProductsContent() {
                             <span className="text-lg font-semibold">₹{formatPrice(product.regularPrice)}</span>
                           )}
                         </div>
-                        <div className="w-full grid grid-cols-2 gap-2">
+                        <div className="w-full grid gap-2">
+                          <div className="flex items-center justify-end gap-2 mb-2">
+                            <label className="text-sm">Quantity:</label>
+                            <select 
+                              className="w-20 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                              onChange={(e) => {
+                                const qty = parseInt(e.target.value);
+                                handleQuantityChange(product.id, qty);
+                              }}
+                              defaultValue="1"
+                            >
+                              {[...Array(8)].map((_, i) => (
+                                <option key={i + 1} value={i + 1}>
+                                  {i + 1}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                           {product.category.name !== 'OTHER' && (
-                            <>
-                              <div className="col-span-2 flex items-center justify-end gap-2 mb-2">
-                                <label className="text-sm">Quantity:</label>
-                                <select 
-                                  className="w-20 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-                                  onChange={(e) => {
-                                    const qty = parseInt(e.target.value);
-                                    handleQuantityChange(product.id, qty);
-                                  }}
-                                  defaultValue="1"
-                                >
-                                  {[...Array(8)].map((_, i) => (
-                                    <option key={i + 1} value={i + 1}>
-                                      {i + 1}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <Button 
-                                variant="outline"
-                                onClick={() => handleAddToBuild(product)}
-                                className="w-full text-sm px-2"
-                              >
-                                Add to Build
-                              </Button>
-                              <Button
-                                onClick={() => handleAddToCart(product)}
-                                disabled={addingToCart === product.id}
-                                className="w-full text-sm px-2"
-                              >
-                                {addingToCart === product.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                ) : null}
-                                Add to Cart
-                              </Button>
-                            </>
+                            <Button 
+                              variant="outline"
+                              onClick={() => handleAddToBuild(product)}
+                              className="w-full text-sm px-2"
+                            >
+                              Add to Build
+                            </Button>
                           )}
+                          <Button
+                            onClick={() => handleAddToCart(product)}
+                            disabled={addingToCart === product.id}
+                            className="w-full text-sm px-2"
+                          >
+                            {addingToCart === product.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : null}
+                            Add to Cart
+                          </Button>
                         </div>
                       </CardFooter>
                     </Card>
