@@ -39,7 +39,8 @@ export const authOptions: NextAuthOptions = {
       name: 'WhatsApp',
       credentials: {
         phone: { label: 'Phone', type: 'tel' },
-        otp: { label: 'OTP', type: 'text' }
+        otp: { label: 'OTP', type: 'text' },
+        name: { label: 'Name', type: 'text' }
       },
       async authorize(credentials) {
         if (!credentials?.phone || !credentials?.otp) {
@@ -75,13 +76,18 @@ export const authOptions: NextAuthOptions = {
             user = await prisma.user.create({
               data: {
                 phone: credentials.phone,
+                name: credentials.name || undefined,
                 isVerified: true
               }
             });
-          } else {
-            await prisma.user.update({
+          } else if (credentials.name && !user.name) {
+            // Update user's name if provided and not set
+            user = await prisma.user.update({
               where: { id: user.id },
-              data: { isVerified: true }
+              data: {
+                name: credentials.name,
+                isVerified: true
+              }
             });
           }
 
@@ -131,10 +137,10 @@ export const authOptions: NextAuthOptions = {
 
           return {
             id: user.id,
+            phone: user.phone || undefined,
             name: user.name || undefined,
             email: user.email || undefined,
-            phone: user.phone,
-            isVerified: true
+            isVerified: user.isVerified
           };
         }
 
@@ -168,14 +174,6 @@ export const authOptions: NextAuthOptions = {
           isVerified: token.isVerified
         }
       };
-    },
-    redirect({ url, baseUrl }) {
-      // Handle redirects after sign in/out
-      if (url.startsWith('/account') || url.startsWith('/orders')) {
-        return baseUrl;
-      }
-      // Keep user on same page for other urls
-      return url;
     },
   },
   pages: {

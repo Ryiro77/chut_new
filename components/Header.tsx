@@ -73,15 +73,20 @@ export function Header() {
             <SearchBar />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
             <ThemeToggle />
             
             {session ? (
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="relative">
+                    <Button variant="ghost" className="relative flex items-center gap-2">
                       <User className="h-5 w-5" />
+                      {session.user.name && (
+                        <span className="hidden md:inline-block text-sm">
+                          {session.user.name}
+                        </span>
+                      )}
                       <span className="sr-only">Account menu</span>
                     </Button>
                   </DropdownMenuTrigger>

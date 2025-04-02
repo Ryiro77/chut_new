@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { phone, otp } = await request.json();
+    const { phone, otp, name } = await request.json();
 
     if (!phone || !otp) {
       return NextResponse.json(
@@ -96,13 +96,18 @@ export async function PUT(request: NextRequest) {
       user = await prisma.user.create({
         data: {
           phone,
+          name,
           isVerified: true
         }
       });
     } else {
       await prisma.user.update({
         where: { id: user.id },
-        data: { isVerified: true }
+        data: { 
+          isVerified: true,
+          // Only update name if provided and user doesn't have one
+          ...(name && !user.name ? { name } : {})
+        }
       });
     }
 

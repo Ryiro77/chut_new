@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, Suspense, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,23 +10,44 @@ import { Container } from '@/components/ui/container'
 import { toast } from 'sonner'
 
 function AdminLoginContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [password, setPassword] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
   
+  // Redirect if already authenticated as admin
+  useEffect(() => {
+    const adminAuth = document.cookie.includes(`admin-auth=${process.env.NEXT_PUBLIC_ADMIN_PASSWORD}`)
+    if (adminAuth) {
+      window.location.replace('/admin/dashboard')
+    }
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsLoading(true)
     
-    if (password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
-      // Set the admin auth cookie
-      document.cookie = `admin-auth=${password}; path=/`
-      
-      // Redirect back to the original URL or admin dashboard
-      const returnTo = searchParams.get('returnTo') || '/admin/dashboard'
-      router.push(returnTo)
-      toast.success('Successfully logged in to admin area')
-    } else {
-      toast.error('Invalid password')
+    try {
+      if (password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
+        // Set the admin auth cookie
+        document.cookie = `admin-auth=${password}; path=/`
+        
+        // Get return URL or default to dashboard
+        const returnTo = searchParams.get('returnTo')
+        const redirectPath = returnTo || '/admin/dashboard'
+        
+        // Show success message
+        toast.success('Successfully logged in to admin area')
+        
+        // Use replace to force a page refresh and prevent going back to login
+        window.location.replace(redirectPath)
+      } else {
+        toast.error('Invalid password')
+      }
+    } catch (error) {
+      toast.error('Login failed')
+      console.error('Login error:', error)
+    } finally {
+      setIsLoading(false)
     }
   }
   
@@ -49,12 +70,13 @@ function AdminLoginContent() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
                 />
               </div>
             </CardContent>
             <CardFooter>
-              <Button type="submit" className="w-full">
-                Login
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Logging in...' : 'Login'}
               </Button>
             </CardFooter>
           </form>
