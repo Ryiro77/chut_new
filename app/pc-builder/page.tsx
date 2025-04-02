@@ -59,29 +59,18 @@ export default function PCBuilderPage() {
 
   const loadSavedBuild = useCallback(async () => {
     try {
-      // Always check local storage first to get the most recent build
-      const savedBuild = localStorage.getItem(BUILD_STORAGE_KEY);
-      let localStorageComponents = savedBuild ? JSON.parse(savedBuild) : null;
+      let loadedComponents = null;
 
-      // If user is logged in, try to get their latest build from API
       if (session?.user) {
+        // Try to load from user's account first
         try {
           const response = await fetch('/api/builds/latest');
           const data = await response.json();
-          
           if (response.ok && data.components) {
-            const apiComponents = data.components as ComponentsMap;
-            const apiTimestamp = new Date(data.updatedAt).getTime();
-            const localTimestamp = localStorageComponents?.timestamp || 0;
-
-            // Use the more recent build between API and local storage
-            if (apiTimestamp > localTimestamp) {
-              localStorageComponents = apiComponents;
-              // Update local storage with the newer build from API
-              localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
-                ...apiComponents,
-                timestamp: apiTimestamp
-              }));
+            // Type check and only load if there's at least one component
+            const components = data.components as ComponentsMap;
+            if (!Object.values(components).every((comp: Component) => !comp.id)) {
+              loadedComponents = components;
             }
           }
         } catch (error) {
@@ -89,13 +78,24 @@ export default function PCBuilderPage() {
         }
       }
 
-      // Set components from whichever source had the most recent build
-      if (localStorageComponents) {
-        setComponents(localStorageComponents);
+      // If no build found in account or not logged in, try local storage
+      if (!loadedComponents) {
+        const savedBuild = localStorage.getItem(BUILD_STORAGE_KEY);
+        if (savedBuild) {
+          const parsed = JSON.parse(savedBuild) as ComponentsMap;
+          // Only load if there's at least one component
+          if (!Object.values(parsed).every((comp: Component) => !comp.id)) {
+            loadedComponents = parsed;
+          }
+        }
       }
+
+      // Set components to either loaded build or initial empty state
+      setComponents(loadedComponents || initialComponents);
     } catch (error) {
       console.error('Error loading build:', error);
       toast.error('Failed to load saved build');
+      setComponents(initialComponents);
     }
   }, [session]);
 
@@ -153,8 +153,9 @@ export default function PCBuilderPage() {
     if (typeof window === 'undefined') return;
     
     const saveBuild = async () => {
-      // Don't save empty builds
+      // Check if build is empty
       if (Object.values(components).every(comp => !comp.id)) {
+        // Clear storage if build is empty
         localStorage.removeItem(BUILD_STORAGE_KEY);
         return;
       }
@@ -179,7 +180,6 @@ export default function PCBuilderPage() {
           });
         } catch (error) {
           console.error('Failed to save build to account:', error);
-          toast.error('Failed to save build to your account');
         }
       }
     };
@@ -225,10 +225,37 @@ export default function PCBuilderPage() {
       [type]: { type: componentTypes[type], id: null, name: null, price: null, brand: null }
     };
     
-    setComponents(updatedComponents);
-    // Immediately update local storage
-    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(updatedComponents));
-  }
+    // Check if this removal makes the build empty
+    const isBuildEmpty = Object.values(updatedComponents).every(comp => !comp.id);
+    
+    if (isBuildEmpty) {
+      // If build is now empty, reset to initial state and clear storage
+      setComponents(initialComponents);
+      localStorage.removeItem(BUILD_STORAGE_KEY);
+      
+      // Also clear from user's account if logged in
+      if (session?.user) {
+        fetch('/api/builds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            components: initialComponents,
+            name: 'Current Build',
+            isPublic: false
+          }),
+        }).catch(error => {
+          console.error('Failed to clear build from account:', error);
+        });
+      }
+    } else {
+      // If build still has components, update normally
+      setComponents(updatedComponents);
+      localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
+        ...updatedComponents,
+        timestamp: Date.now()
+      }));
+    }
+  };
 
   const handleShareBuild = async () => {
     try {
