@@ -1,12 +1,13 @@
 'use client'
 
 import Link from "next/link"
-import { User, ShoppingCart } from "lucide-react"
+import { User, ShoppingCart, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Container } from "@/components/ui/container"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { SearchBar } from "@/components/SearchBar"
 import { useRouter, usePathname } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -16,6 +17,13 @@ import {
   NavigationMenuContent,
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import Image from "next/image"
 
 const categories = [
@@ -24,20 +32,31 @@ const categories = [
   { name: "Motherboards", href: "/products?category=motherboard", type: "MOTHERBOARD" },
   { name: "RAM", href: "/products?category=ram", type: "RAM" },
   { name: "Storage", href: "/products?category=storage", type: "STORAGE" },
-  { name: "Power Supplies", href: "/products?category=psu", type: "PSU" },
+  { name: "PSUs", href: "/products?category=psu", type: "PSU" },
   { name: "Cases", href: "/products?category=case", type: "CASE" },
-  { name: "Coolers", href: "/products?category=cooler", type: "COOLER" },
-] as const
+  { name: "Coolers", href: "/products?category=cooler", type: "COOLER" }
+]
 
 export function Header() {
   const router = useRouter()
   const pathname = usePathname()
+  const { data: session } = useSession()
 
   const handleCategoryClick = (href: string, e: React.MouseEvent) => {
     if (pathname === '/products') {
       e.preventDefault()
       router.push(href, { scroll: false })
     }
+  }
+
+  const handleSignOut = async () => {
+    // Check if we're on a user-specific page
+    const isUserPage = pathname.startsWith('/account') || pathname.startsWith('/orders')
+    
+    await signOut({ 
+      redirect: isUserPage,
+      callbackUrl: isUserPage ? '/' : pathname
+    })
   }
 
   return (
@@ -56,12 +75,40 @@ export function Header() {
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="ghost" size="icon" asChild>
-              <Link href="/account">
-                <User className="h-5 w-5" />
-                <span className="sr-only">Account</span>
-              </Link>
-            </Button>
+            
+            {session ? (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="relative">
+                      <User className="h-5 w-5" />
+                      <span className="sr-only">Account menu</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link href="/account">My Account</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/orders">My Orders</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleSignOut}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Log out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <Button variant="ghost" size="icon" asChild>
+                <Link href="/auth">
+                  <User className="h-5 w-5" />
+                  <span className="sr-only">Sign in</span>
+                </Link>
+              </Button>
+            )}
+
             <Button variant="ghost" size="icon" asChild>
               <Link href="/cart">
                 <ShoppingCart className="h-5 w-5" />

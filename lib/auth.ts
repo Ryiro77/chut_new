@@ -6,18 +6,18 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      email?: string | null;
-      name?: string | null;
-      phone: string;
+      phone?: string;
+      name?: string;
+      email?: string;
       isVerified: boolean;
     }
   }
 
   interface User {
     id: string;
-    email?: string | null;
-    name?: string | null;
-    phone: string;
+    phone?: string;
+    name?: string;
+    email?: string;
     isVerified: boolean;
   }
 }
@@ -25,9 +25,9 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     id: string;
-    email?: string | null;
-    name?: string | null;
-    phone: string;
+    phone?: string;
+    name?: string;
+    email?: string;
     isVerified: boolean;
   }
 }
@@ -47,7 +47,6 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          // Find and verify OTP
           const verification = await prisma.oTPVerification.findFirst({
             where: {
               phone: credentials.phone,
@@ -63,13 +62,11 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          // Mark OTP as verified
           await prisma.oTPVerification.update({
             where: { id: verification.id },
             data: { verified: true }
           });
 
-          // Get or create user
           let user = await prisma.user.findUnique({
             where: { phone: credentials.phone }
           });
@@ -91,14 +88,57 @@ export const authOptions: NextAuthOptions = {
           return {
             id: user.id,
             phone: user.phone,
-            name: user.name,
-            email: user.email,
+            name: user.name || undefined,
+            email: user.email || undefined,
             isVerified: user.isVerified
           };
         } catch (error) {
           console.error('Auth error:', error);
           return null;
         }
+      }
+    }),
+    CredentialsProvider({
+      id: 'development',
+      name: 'Development Login',
+      credentials: {
+        username: { label: 'Username', type: 'text' },
+        password: { label: 'Password', type: 'password' }
+      },
+      async authorize(credentials) {
+        if (!process.env.DEV_USERNAME || !process.env.DEV_PASSWORD) {
+          return null;
+        }
+
+        if (
+          credentials?.username === process.env.DEV_USERNAME &&
+          credentials?.password === process.env.DEV_PASSWORD
+        ) {
+          let user = await prisma.user.findFirst({
+            where: { email: 'dev@example.com' }
+          });
+
+          if (!user) {
+            user = await prisma.user.create({
+              data: {
+                email: 'dev@example.com',
+                name: 'Development User',
+                phone: '0000000000',
+                isVerified: true
+              }
+            });
+          }
+
+          return {
+            id: user.id,
+            name: user.name || undefined,
+            email: user.email || undefined,
+            phone: user.phone,
+            isVerified: true
+          };
+        }
+
+        return null;
       }
     })
   ],
@@ -128,7 +168,15 @@ export const authOptions: NextAuthOptions = {
           isVerified: token.isVerified
         }
       };
-    }
+    },
+    redirect({ url, baseUrl }) {
+      // Handle redirects after sign in/out
+      if (url.startsWith('/account') || url.startsWith('/orders')) {
+        return baseUrl;
+      }
+      // Keep user on same page for other urls
+      return url;
+    },
   },
   pages: {
     signIn: '/auth',

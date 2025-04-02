@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import { Product, Component } from '@/lib/types'
 import { addToCart } from '@/lib/api-client'
 import { SelectComponentDialog } from './_components/SelectComponentDialog'
+import { useSession } from "next-auth/react"
 
 const BUILD_STORAGE_KEY = 'pc_builder_current_build';
 
@@ -49,13 +50,56 @@ const initialComponents: ComponentsMap = {
 
 export default function PCBuilderPage() {
   const router = useRouter()
+  const { data: session } = useSession()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedType, setSelectedType] = useState<keyof typeof componentTypes | null>(null)
   const [loading, setLoading] = useState(false)
   const [components, setComponents] = useState<ComponentsMap>(initialComponents)
   const [compatibilityResult, setCompatibilityResult] = useState<CompatibilityResult>({ compatible: true, messages: [] })
 
-  // Load build from local storage on initial mount
+  const loadSavedBuild = useCallback(async () => {
+    try {
+      // Always check local storage first to get the most recent build
+      const savedBuild = localStorage.getItem(BUILD_STORAGE_KEY);
+      let localStorageComponents = savedBuild ? JSON.parse(savedBuild) : null;
+
+      // If user is logged in, try to get their latest build from API
+      if (session?.user) {
+        try {
+          const response = await fetch('/api/builds/latest');
+          const data = await response.json();
+          
+          if (response.ok && data.components) {
+            const apiComponents = data.components as ComponentsMap;
+            const apiTimestamp = new Date(data.updatedAt).getTime();
+            const localTimestamp = localStorageComponents?.timestamp || 0;
+
+            // Use the more recent build between API and local storage
+            if (apiTimestamp > localTimestamp) {
+              localStorageComponents = apiComponents;
+              // Update local storage with the newer build from API
+              localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
+                ...apiComponents,
+                timestamp: apiTimestamp
+              }));
+            }
+          }
+        } catch (error) {
+          console.error('Error loading from API:', error);
+        }
+      }
+
+      // Set components from whichever source had the most recent build
+      if (localStorageComponents) {
+        setComponents(localStorageComponents);
+      }
+    } catch (error) {
+      console.error('Error loading build:', error);
+      toast.error('Failed to load saved build');
+    }
+  }, [session]);
+
+  // Load build on initial mount or session change
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -69,42 +113,81 @@ export default function PCBuilderPage() {
           const response = await fetch(`/api/builds?id=${buildId}`);
           const data = await response.json();
           if (!response.ok) throw new Error(data.error);
+          
+          const newComponents = data.components as ComponentsMap;
+          setComponents(newComponents);
 
-          setComponents(data.components as ComponentsMap);
-          // Save the fetched build to local storage
-          localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(data.components));
+          // Save to local storage with timestamp
+          localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
+            ...newComponents,
+            timestamp: Date.now()
+          }));
+          
+          if (session?.user) {
+            await fetch('/api/builds', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                components: newComponents,
+                name: 'Imported Build',
+                isPublic: false
+              }),
+            });
+          }
+          
           router.replace('/pc-builder');
         } catch (error) {
           console.error('Load build error:', error);
           toast.error('Failed to load shared build');
-          // Try loading from local storage as fallback
-          loadFromLocalStorage();
+          loadSavedBuild();
         }
       };
       fetchBuild();
     } else {
-      // If no build ID, try loading from local storage
-      loadFromLocalStorage();
+      loadSavedBuild();
     }
-  }, [router]);
+  }, [router, session, loadSavedBuild]);
 
-  // Save to local storage whenever components change
+  // Save build whenever components change
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(components));
-  }, [components]);
-
-  const loadFromLocalStorage = () => {
-    try {
-      const savedBuild = localStorage.getItem(BUILD_STORAGE_KEY);
-      if (savedBuild) {
-        const parsedBuild = JSON.parse(savedBuild);
-        setComponents(parsedBuild);
+    
+    const saveBuild = async () => {
+      // Don't save empty builds
+      if (Object.values(components).every(comp => !comp.id)) {
+        localStorage.removeItem(BUILD_STORAGE_KEY);
+        return;
       }
-    } catch (error) {
-      console.error('Error loading build from localStorage:', error);
-    }
-  };
+
+      // Always save to local storage with timestamp
+      localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify({
+        ...components,
+        timestamp: Date.now()
+      }));
+
+      // If logged in, also save to user's account with debounce
+      if (session?.user) {
+        try {
+          await fetch('/api/builds', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              components,
+              name: 'Current Build',
+              isPublic: false
+            }),
+          });
+        } catch (error) {
+          console.error('Failed to save build to account:', error);
+          toast.error('Failed to save build to your account');
+        }
+      }
+    };
+
+    // Debounce save to API but not local storage
+    const timeoutId = setTimeout(saveBuild, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [components, session]);
 
   const handleSelectComponent = (type: keyof typeof componentTypes) => {
     setSelectedType(type)
@@ -112,10 +195,10 @@ export default function PCBuilderPage() {
   }
 
   const handleComponentSelect = (product: Product) => {
-    if (!selectedType) return
+    if (!selectedType) return;
     
-    setComponents(prev => ({
-      ...prev,
+    const updatedComponents = {
+      ...components,
       [selectedType]: {
         type: componentTypes[selectedType],
         id: product.id,
@@ -129,14 +212,22 @@ export default function PCBuilderPage() {
         specs: product.specs,
         isOnSale: product.isOnSale
       }
-    }))
+    };
+    
+    setComponents(updatedComponents);
+    // Immediately update local storage
+    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(updatedComponents));
   }
 
   const handleRemoveComponent = (type: keyof typeof componentTypes) => {
-    setComponents(prev => ({
-      ...prev,
+    const updatedComponents = {
+      ...components,
       [type]: { type: componentTypes[type], id: null, name: null, price: null, brand: null }
-    }))
+    };
+    
+    setComponents(updatedComponents);
+    // Immediately update local storage
+    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(updatedComponents));
   }
 
   const handleShareBuild = async () => {
@@ -186,11 +277,27 @@ export default function PCBuilderPage() {
 
     // Check RAM Type Compatibility
     if (ram.id && motherboard.id) {
-      const ramType = ram.specs?.find(spec => spec.name.toLowerCase() === 'type')?.value; // Assuming RAM type spec is named 'Type'
-      const mbRamType = motherboard.specs?.find(spec => spec.name.toLowerCase() === 'memory type')?.value; // Assuming MB RAM type spec is named 'Memory Type'
-      
-      if (ramType && mbRamType && !mbRamType.toLowerCase().includes(ramType.toLowerCase())) { // Check if MB supports the RAM type (case-insensitive)
-        messages.push(`RAM type (${ramType}) is not compatible with motherboard supported types (${mbRamType})`);
+      // Check RAM Type (e.g. DDR4/DDR5)
+      const ramType = ram.specs?.find(spec => spec.name.toLowerCase() === 'ram type')?.value;
+      const mbRamType = motherboard.specs?.find(spec => spec.name.toLowerCase() === 'ram type')?.value;
+
+      if (ramType && mbRamType) {
+        // Extract base DDR version for comparison (e.g. "DDR4" from "DDR4-3200")
+        const ramDDR = ramType.match(/DDR\d/)?.[0];
+        const mbDDR = mbRamType.match(/DDR\d/)?.[0];
+
+        if (ramDDR && mbDDR && ramDDR !== mbDDR) {
+          messages.push(`RAM type (${ramDDR}) is not compatible with motherboard's RAM type (${mbDDR})`);
+        }
+      }
+
+      // Check RAM Speed compatibility if both parts specify it
+      const ramSpeed = parseInt(ram.specs?.find(spec => spec.name.toLowerCase() === 'speed')?.value || '0');
+      const mbMaxSpeed = parseInt(motherboard.specs?.find(spec => 
+        spec.name.toLowerCase().includes('max') && spec.name.toLowerCase().includes('speed'))?.value || '0');
+
+      if (ramSpeed && mbMaxSpeed && ramSpeed > mbMaxSpeed) {
+        messages.push(`RAM speed (${ramSpeed}MHz) exceeds motherboard's maximum supported speed (${mbMaxSpeed}MHz)`);
       }
     }
 

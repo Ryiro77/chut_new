@@ -1,69 +1,102 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { nanoid } from 'nanoid';
-import { Component } from "@/lib/types";
-import { Decimal } from "@prisma/client/runtime/library";
-import { Prisma } from "@prisma/client";
+import { nanoid } from 'nanoid'
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/db"
+import { NextResponse } from "next/server"
+import { Component } from '@/lib/types'
 
-type ComponentsMap = Record<string, Component>;
-
-export async function POST(request: NextRequest) {
-  try {
-    const data = await request.json();
-    const { components } = data as { components: ComponentsMap };
-
-    const shortId = nanoid(6);
-    const totalPrice = Object.values(components)
-      .reduce((sum: number, comp: Component) => {
-        return sum + (typeof comp.price === 'number' ? comp.price : 0);
-      }, 0);
-
-    await prisma.pCBuild.create({
-      data: {
-        shortId,
-        name: `Build ${shortId}`,
-        components: components as unknown as Prisma.InputJsonValue,
-        totalPrice: new Decimal(totalPrice),
-        isPublic: true,
-      }
-    });
-
-    const buildUrl = `${request.nextUrl.origin}/pc-builder?id=${shortId}`;
-    return NextResponse.json({ shortId, buildUrl });
-  } catch (error) {
-    console.error('Build creation error:', error);
-    return NextResponse.json({ error: 'Failed to create build' }, { status: 500 });
-  }
+// Utility to create share URL
+const createShareUrl = (shortId: string) => {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  return `${baseUrl}/pc-builder?id=${shortId}`
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+interface ComponentMap {
+  [key: string]: Component;
+}
 
-    if (!id) {
-      return NextResponse.json({ error: 'Build ID is required' }, { status: 400 });
+export async function POST(request: Request) {
+  try {
+    const session = await getServerSession(authOptions)
+    const body = await request.json()
+
+    if (!body.components) {
+      return new NextResponse("Missing components data", { status: 400 })
     }
 
-    const build = await prisma.pCBuild.findUnique({
-      where: { shortId: id }
-    });
+    // Create a new build with a unique short ID
+    const shortId = nanoid(10)
+    
+    const build = await prisma.pCBuild.create({
+      data: {
+        shortId,
+        name: body.name || 'Untitled Build',
+        components: body.components,
+        totalPrice: Object.values(body.components as ComponentMap).reduce((sum, comp) => 
+          sum + (comp.price || 0), 0
+        ),
+        isPublic: body.isPublic ?? true,
+        userId: session?.user?.id // Optional: only set if user is logged in
+      }
+    })
 
-    if (!build) {
-      return NextResponse.json({ error: 'Build not found' }, { status: 404 });
+    // Create a shared build record if the build is public
+    if (build.isPublic) {
+      await prisma.sharedBuild.create({
+        data: {
+          userId: session?.user?.id || build.id, // Use build ID as user ID for anonymous builds
+          buildId: build.id,
+          shareLink: createShareUrl(shortId)
+        }
+      })
     }
 
     return NextResponse.json({
-      id: build.id,
-      shortId: build.shortId,
-      name: build.name,
-      components: build.components,
-      totalPrice: build.totalPrice.toNumber(),
-      isPublic: build.isPublic,
-      createdAt: build.createdAt
-    });
+      ...build,
+      buildUrl: createShareUrl(shortId)
+    })
   } catch (error) {
-    console.error('Build fetch error:', error);
-    return NextResponse.json({ error: 'Failed to fetch build' }, { status: 500 });
+    console.error("Error creating build:", error)
+    return new NextResponse("Internal error", { status: 500 })
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return new NextResponse("Missing build ID", { status: 400 })
+    }
+
+    const build = await prisma.pCBuild.findUnique({
+      where: {
+        shortId: id
+      }
+    })
+
+    if (!build) {
+      return new NextResponse("Build not found", { status: 404 })
+    }
+
+    // If build is not public and user is not owner, deny access
+    const session = await getServerSession(authOptions)
+    if (!build.isPublic && build.userId !== session?.user?.id) {
+      return new NextResponse("Unauthorized", { status: 401 })
+    }
+
+    // Increment view count if build is shared
+    if (build.isPublic) {
+      await prisma.sharedBuild.updateMany({
+        where: { buildId: build.id },
+        data: { views: { increment: 1 } }
+      })
+    }
+
+    return NextResponse.json(build)
+  } catch (error) {
+    console.error("Error fetching build:", error)
+    return new NextResponse("Internal error", { status: 500 })
   }
 }
