@@ -100,3 +100,37 @@ export async function getProducts({ category, minPrice, maxPrice, search, filter
     throw new Error('Failed to fetch products')
   }
 }
+
+export async function searchProducts(query: string) {
+  try {
+    const products = await prisma.product.findMany({
+      where: {
+        OR: [
+          { name: { contains: query } },
+          { sku: { contains: query } },
+          { brand: { contains: query } }
+        ]
+      },
+      include: {
+        category: true,
+        images: {
+          where: { isMain: true },
+          take: 1
+        }
+      },
+      orderBy: {
+        updatedAt: 'desc'
+      },
+      take: 10
+    })
+
+    return products.map(product => ({
+      ...product,
+      regularPrice: product.regularPrice.toNumber(),
+      discountedPrice: product.discountedPrice?.toNumber() ?? null
+    }))
+  } catch (error) {
+    console.error('Failed to search products:', error)
+    throw new Error('Failed to search products')
+  }
+}
