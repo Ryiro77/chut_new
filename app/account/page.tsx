@@ -58,7 +58,7 @@ interface Component {
 }
 
 export default function AccountPage() {
-  const { data: session } = useSession()
+  const { data: session, update: updateSession } = useSession()
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [userData, setUserData] = useState<UserData | null>(null)
@@ -107,6 +107,21 @@ export default function AccountPage() {
       })
       
       if (!response.ok) throw new Error('Failed to update profile')
+
+      // Get the updated user data from response
+      const { user } = await response.json()
+      
+      // Update the session with new profile data
+      await updateSession({
+        ...session,
+        user: {
+          ...session?.user,
+          name: user.name,
+          email: user.email,
+          phone: user.phone
+        }
+      })
+      
       toast.success('Profile updated successfully')
     } catch (error) {
       console.error('Failed to update profile:', error)

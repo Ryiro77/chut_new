@@ -1,13 +1,13 @@
 'use client'
 
-import Link from "next/link"
+import { useRouter, usePathname } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
 import { User, ShoppingCart, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Container } from "@/components/ui/container"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { SearchBar } from "@/components/SearchBar"
-import { useRouter, usePathname } from "next/navigation"
-import { useSession, signOut } from "next-auth/react"
+import Link from "next/link"
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -41,7 +41,7 @@ const categories = [
 export function Header() {
   const router = useRouter()
   const pathname = usePathname()
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
 
   const handleCategoryClick = (href: string, e: React.MouseEvent) => {
     if (pathname === '/products') {
@@ -51,7 +51,6 @@ export function Header() {
   }
 
   const handleSignOut = async () => {
-    // Check if we're on a user-specific page
     const isUserPage = pathname.startsWith('/account') || pathname.startsWith('/orders')
     
     await signOut({ 
@@ -64,20 +63,22 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       {/* Top Section - Logo, Search, User Controls */}
       <Container>
-        <div className="flex h-16 items-center justify-between">
-          <div className="flex gap-6 md:gap-10">
-            <Link href="/" className="flex items-center space-x-2">
-              <Image src="/computerhutlogo.png" alt="Computer Hut Logo" width={32} height={32} />
-              <span className="inline-block font-bold">Computer Hut</span>
+        <div className="flex h-16 items-center justify-between gap-4">
+          <div className="flex gap-6 md:gap-10 flex-1">
+            <Link href="/" className="flex items-center gap-2 min-w-fit">
+              <Image src="/computerhutlogo.png" alt="Computer Hut Logo" width={40} height={40} className="w-10 h-10" />
+              <span className="inline-block font-bold text-lg whitespace-nowrap">Computer Hut</span>
             </Link>
 
-            <SearchBar />
+            <div className="flex-1 max-w-3xl">
+              <SearchBar />
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
             
-            {session ? (
+            {status === 'authenticated' && session ? (
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

@@ -152,6 +152,21 @@ function AuthContent() {
     }
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !loading) {
+      e.preventDefault();
+      if (showDevLogin) {
+        handleDevLogin();
+      } else if (otpVerified) {
+        handleCompleteSignIn();
+      } else if (otpSent) {
+        handleVerifyOTP();
+      } else {
+        handleSendOTP();
+      }
+    }
+  };
+
   // Show loading state while checking session
   if (status === 'loading') {
     return (
@@ -205,6 +220,7 @@ function AuthContent() {
                       placeholder="Enter your 10-digit phone number"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
+                      onKeyDown={handleKeyPress}
                       disabled={otpSent || loading || otpVerified}
                     />
                   </div>
@@ -218,6 +234,7 @@ function AuthContent() {
                         placeholder="Enter 6-digit OTP"
                         value={otp}
                         onChange={(e) => setOtp(e.target.value)}
+                        onKeyDown={handleKeyPress}
                         disabled={loading}
                       />
                     </div>
@@ -232,6 +249,7 @@ function AuthContent() {
                         placeholder="Enter your full name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
+                        onKeyDown={handleKeyPress}
                         disabled={loading}
                       />
                     </div>
@@ -247,6 +265,7 @@ function AuthContent() {
                       type="text"
                       value={devUsername}
                       onChange={(e) => setDevUsername(e.target.value)}
+                      onKeyDown={handleKeyPress}
                       disabled={loading}
                     />
                   </div>
@@ -257,6 +276,7 @@ function AuthContent() {
                       type="password"
                       value={devPassword}
                       onChange={(e) => setDevPassword(e.target.value)}
+                      onKeyDown={handleKeyPress}
                       disabled={loading}
                     />
                   </div>

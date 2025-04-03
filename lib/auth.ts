@@ -149,8 +149,9 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
-    jwt: async ({ token, user }) => {
+    jwt: async ({ token, user, trigger, session }) => {
       if (user) {
+        // Initial sign in
         return {
           ...token,
           id: user.id,
@@ -159,6 +160,15 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           isVerified: user.isVerified
         };
+      }
+      // Handle updates
+      if (trigger === "update" && session) {
+        return {
+          ...token,
+          name: session.user.name,
+          email: session.user.email,
+          phone: session.user.phone
+        }
       }
       return token;
     },
