@@ -134,16 +134,25 @@ export function Header() {
               <NavigationMenuItem>
                 <NavigationMenuTrigger>Products</NavigationMenuTrigger>
                 <NavigationMenuContent>
-                  <ul className="grid w-[400px] gap-2 p-4 md:w-[500px] md:grid-cols-2">
+                  <ul className="grid w-[400px] gap-3 p-4 md:w-[800px] md:grid-cols-5 md:grid-rows-2">
                     {categories.map((category) => (
                       <li key={category.type}>
                         <NavigationMenuLink asChild>
                           <Link
                             href={category.href}
                             onClick={(e) => handleCategoryClick(category.href, e)}
-                            className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                            className="block select-none space-y-2 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
                           >
-                            <div className="text-sm font-medium leading-none">{category.name}</div>
+                            <div className="flex flex-col items-center gap-2">
+                              <Image 
+                                src={`/nav-menu/${category.type.toLowerCase()}.png`}
+                                alt={category.name}
+                                width={60}
+                                height={60}
+                                className="w-15 h-15 object-contain"
+                              />
+                              <div className="text-sm font-medium leading-none text-center">{category.name}</div>
+                            </div>
                           </Link>
                         </NavigationMenuLink>
                       </li>

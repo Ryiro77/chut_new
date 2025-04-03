@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
 import { Checkbox } from "@/components/ui/checkbox"
 import Image from "next/image"
+import Link from "next/link"
 import { getProducts } from "../actions"
 import { Loader2 } from "lucide-react"
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -241,10 +242,8 @@ export default function ProductsContent() {
                             min={filter.min}
                             max={filter.max}
                             step={(filter.max - filter.min) / 20}
-                            value={[
-                              selectedFilters[filter.id]?.[0] ? parseInt(selectedFilters[filter.id][0]) : filter.min,
-                              selectedFilters[filter.id]?.[1] ? parseInt(selectedFilters[filter.id][1]) : filter.max
-                            ]}
+                            value={[selectedFilters[filter.id]?.[0] ? parseInt(selectedFilters[filter.id][0]) : filter.min,
+                              selectedFilters[filter.id]?.[1] ? parseInt(selectedFilters[filter.id][1]) : filter.max]}
                             onValueChange={(value) => {
                               setSelectedFilters(prev => ({
                                 ...prev,
@@ -342,39 +341,41 @@ export default function ProductsContent() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {products.map(product => (
                     <Card key={product.id} className="overflow-hidden group">
-                      <div className="aspect-square relative bg-muted">
-                        {product.images?.length > 0 && (
-                          <Image
-                            src={
-                              product.images.find(img => img.isMain)?.url || 
-                              `/uploads/${product.images.find(img => img.isMain)?.filePath || 
-                              product.images[0]?.filePath}` ||
-                              '/no-image.png'
-                            }
-                            alt={product.name}
-                            fill
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                            className="object-contain"
-                            priority={product.images.find(img => img.isMain)?.isMain}
-                          />
-                        )}
-                      </div>
-                      <CardHeader>
-                        <CardTitle className="text-lg">{product.name}</CardTitle>
-                        <p className="text-sm text-muted-foreground">{product.brand}</p>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="mt-4 space-y-1">
-                          {product.specs?.filter(spec => spec.name.toLowerCase() !== 'type')
-                            .slice(0, 3)
-                            .map(spec => (
-                              <div key={spec.id} className="text-sm">
-                                <span className="text-muted-foreground">{spec.name}: </span>
-                                <span>{spec.value}{spec.unit ? ` ${spec.unit}` : ''}</span>
-                              </div>
-                            ))}
+                      <Link href={`/products/${product.id}`} className="cursor-pointer">
+                        <div className="aspect-square relative bg-muted">
+                          {product.images?.length > 0 && (
+                            <Image
+                              src={
+                                product.images.find(img => img.isMain)?.url || 
+                                `/uploads/${product.images.find(img => img.isMain)?.filePath || 
+                                product.images[0]?.filePath}` ||
+                                '/no-image.png'
+                              }
+                              alt={product.name}
+                              fill
+                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                              className="object-contain"
+                              priority={product.images.find(img => img.isMain)?.isMain}
+                            />
+                          )}
                         </div>
-                      </CardContent>
+                        <CardHeader>
+                          <CardTitle className="text-lg">{product.name}</CardTitle>
+                          <p className="text-sm text-muted-foreground">{product.brand}</p>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="mt-4 space-y-1">
+                            {product.specs?.filter(spec => spec.name.toLowerCase() !== 'type')
+                              .slice(0, 3)
+                              .map(spec => (
+                                <div key={spec.id} className="text-sm">
+                                  <span className="text-muted-foreground">{spec.name}: </span>
+                                  <span>{spec.value}{spec.unit ? ` ${spec.unit}` : ''}</span>
+                                </div>
+                              ))}
+                          </div>
+                        </CardContent>
+                      </Link>
                       <CardFooter className="flex flex-col gap-4">
                         <div className="w-full">
                           {product.isOnSale && product.discountedPrice ? (
