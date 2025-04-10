@@ -114,8 +114,7 @@ export async function searchProducts(query: string) {
       include: {
         category: true,
         images: {
-          where: { isMain: true },
-          take: 1
+          where: { isMain: true }  // This ensures we only get main images
         }
       },
       orderBy: {
